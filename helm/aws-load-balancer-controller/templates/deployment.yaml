@@ -170,6 +170,9 @@ spec:
         {{- if .Values.loadBalancerClass }}
         - --load-balancer-class={{ .Values.loadBalancerClass }}
         {{- end }}
+        {{- if .Values.multiClusterIPSubnetIDs }}
+          - --multi-cluster-ip-subnet-ids={{ .Values.multiClusterIPSubnetIDs }}
+        {{- end }}
         {{- if or .Values.env .Values.envSecretName }}
         env:
         {{- if .Values.env}}

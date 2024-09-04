@@ -144,8 +144,6 @@ func (m *cachedTargetsManager) ListTargets(ctx context.Context, tgARN string, fi
 		return nil, err
 	}
 
-	m.logger.Info("got all these targets!", "targets", filteredTargets)
-
 	targetsCacheItem := &targetsCacheItem{
 		mutex:   sync.RWMutex{},
 		targets: filteredTargets,

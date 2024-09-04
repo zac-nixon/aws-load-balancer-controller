@@ -27,7 +27,7 @@ const (
 	flagBackendSecurityGroup                         = "backend-security-group"
 	flagEnableEndpointSlices                         = "enable-endpoint-slices"
 	flagDisableRestrictedSGRules                     = "disable-restricted-sg-rules"
-	flagMultiClusterSubnetIds                        = "multi-cluster-subnet-ids"
+	flagMultiClusterIPSubnetIds                      = "multi-cluster-ip-subnet-ids"
 	defaultLogLevel                                  = "info"
 	defaultMaxConcurrentReconciles                   = 3
 	defaultMaxExponentialBackoffDelay                = time.Second * 1000
@@ -138,7 +138,7 @@ func (cfg *ControllerConfig) BindFlags(fs *pflag.FlagSet) {
 		"Disable the usage of restricted security group rules")
 	fs.StringToStringVar(&cfg.ServiceTargetENISGTags, flagServiceTargetENISGTags, nil,
 		"AWS Tags, in addition to cluster tags, for finding the target ENI security group to which to add inbound rules from NLBs")
-	fs.StringSliceVar(&cfg.MultiClusterSubnetIds, flagMultiClusterSubnetIds, nil, "Required flag when using MultiCluster support. Pass in a list of subnet IDs.")
+	fs.StringSliceVar(&cfg.MultiClusterSubnetIds, flagMultiClusterIPSubnetIds, nil, "Pass in a list of subnet IDs to use for MultiCluster IP mode. If using EKS, you don't have to specify this flag.")
 	cfg.FeatureGates.BindFlags(fs)
 	cfg.AWSConfig.BindFlags(fs)
 	cfg.RuntimeConfig.BindFlags(fs)

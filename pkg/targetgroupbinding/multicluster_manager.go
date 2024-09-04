@@ -19,7 +19,10 @@ const (
 	clusterCIDRKey = "clusterCIDR"
 )
 
+// MultiClusterManager implements logic to support multiple LBCs managing the same Target Group.
 type MultiClusterManager interface {
+	// FilterTargets Given a purposed list of targets from a source (probably ELB API), filter the list down to only targets
+	// the cluster should operate on.
 	FilterTargets(targetInfo []TargetInfo) ([]TargetInfo, error)
 }
 
@@ -38,12 +41,12 @@ type multiClusterManagerImpl struct {
 	cidrCacheTTL   time.Duration
 }
 
+// NewMultiClusterManager constructs a multicluster manager that is immediately ready to use.
 func NewMultiClusterManager(clusterName string, multiClusterEnabled bool, subnetIds []string, ec2Client services.EC2, eks services.EKS, logger logr.Logger) MultiClusterManager {
 	translatedSubnetIds := make([]*string, 0, len(subnetIds))
 
-	if subnetIds != nil {
+	if subnetIds != nil && len(subnetIds) > 0 {
 		for _, subnetId := range subnetIds {
-			logger.Info(fmt.Sprintf("subnet id!: %s", subnetIds))
 			translatedSubnetIds = append(translatedSubnetIds, &subnetId)
 		}
 	}
@@ -64,12 +67,13 @@ func NewMultiClusterManager(clusterName string, multiClusterEnabled bool, subnet
 }
 
 func (m *multiClusterManagerImpl) FilterTargets(allTargets []TargetInfo) ([]TargetInfo, error) {
-	if !m.multiClusterEnabled {
+	if !m.multiClusterEnabled || len(allTargets) == 0 {
 		return allTargets, nil
 	}
 
 	cidrs, err := m.getCIDRS()
 	if err != nil {
+		m.logger.Error(err, "Failed to get cidrs")
 		return nil, err
 	}
 
@@ -95,7 +99,6 @@ func (m *multiClusterManagerImpl) getCIDRS() ([]netip.Prefix, error) {
 	defer m.cidrCacheMutex.Unlock()
 
 	if cachedCIDRs, ok := m.cidrCache.Get(clusterCIDRKey); ok {
-		m.logger.Info(fmt.Sprintf("Found multi-cluster manager CIDR cache: %s", cachedCIDRs))
 		return cachedCIDRs.([]netip.Prefix), nil
 	}
 
@@ -105,7 +108,6 @@ func (m *multiClusterManagerImpl) getCIDRS() ([]netip.Prefix, error) {
 		return nil, err
 	}
 
-	m.logger.Info(fmt.Sprintf("Found multi-cluster manager CIDR from source: %s", cidrs))
 	m.cidrCache.Set(clusterCIDRKey, cidrs, m.cidrCacheTTL)
 	return cidrs, nil
 }
@@ -116,10 +118,6 @@ func (m *multiClusterManagerImpl) fetchSubnetCIDRFromEC2() ([]netip.Prefix, erro
 
 	if err != nil {
 		return nil, err
-	}
-
-	for _, subnetId := range resolvedSubnetIds {
-		m.logger.Info(fmt.Sprintf("Fetching subnet cidr for subnet: %s", *subnetId))
 	}
 
 	input := &ec2sdk.DescribeSubnetsInput{
@@ -133,12 +131,15 @@ func (m *multiClusterManagerImpl) fetchSubnetCIDRFromEC2() ([]netip.Prefix, erro
 	var CIDRStrings []string
 	for _, subnet := range output.Subnets {
 		CIDRStrings = append(CIDRStrings, *subnet.CidrBlock)
+		for _, ipv6Assocation := range subnet.Ipv6CidrBlockAssociationSet {
+			CIDRStrings = append(CIDRStrings, *ipv6Assocation.Ipv6CidrBlock)
+		}
 	}
 	CIDRs, err := networking.ParseCIDRs(CIDRStrings)
 	if err != nil {
 		return nil, err
 	}
-	m.logger.Info(fmt.Sprintf("Found %d subnets in %d CIDRs", len(CIDRs), len(CIDRStrings)))
+	m.logger.Info(fmt.Sprintf("Retrieved these CIDRs: %s", CIDRStrings))
 	return CIDRs, nil
 }
 
