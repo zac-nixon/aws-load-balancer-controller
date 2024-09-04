@@ -35,11 +35,9 @@ type ResourceManager interface {
 }
 
 // NewDefaultResourceManager constructs new defaultResourceManager.
-func NewDefaultResourceManager(k8sClient client.Client, elbv2Client services.ELBV2, ec2Client services.EC2, eksClient services.EKS,
+func NewDefaultResourceManager(k8sClient client.Client, elbv2Client services.ELBV2, ec2Client services.EC2,
 	podInfoRepo k8s.PodInfoRepo, sgManager networking.SecurityGroupManager, sgReconciler networking.SecurityGroupReconciler,
-	vpcInfoProvider networking.VPCInfoProvider,
-	enableMultiClusterIPTargets bool,
-	eksInfoResolver networking.EKSInfoResolver,
+	vpcInfoProvider networking.VPCInfoProvider, multiClusterManager MultiClusterManager,
 	vpcID string, clusterName string, failOpenEnabled bool, endpointSliceEnabled bool, disabledRestrictedSGRulesFlag bool,
 	endpointSGTags map[string]string,
 	eventRecorder record.EventRecorder, logger logr.Logger) *defaultResourceManager {
@@ -52,17 +50,16 @@ func NewDefaultResourceManager(k8sClient client.Client, elbv2Client services.ELB
 
 	networkingManager := NewDefaultNetworkingManager(k8sClient, podENIResolver, nodeENIResolver, sgManager, sgReconciler, vpcID, clusterName, endpointSGTags, logger, disabledRestrictedSGRulesFlag)
 	return &defaultResourceManager{
-		k8sClient:                   k8sClient,
-		targetsManager:              targetsManager,
-		endpointResolver:            endpointResolver,
-		eksInfoResolver:             eksInfoResolver,
-		enableMultiClusterIPTargets: enableMultiClusterIPTargets,
-		networkingManager:           networkingManager,
-		eventRecorder:               eventRecorder,
-		logger:                      logger,
-		vpcID:                       vpcID,
-		vpcInfoProvider:             vpcInfoProvider,
-		podInfoRepo:                 podInfoRepo,
+		k8sClient:           k8sClient,
+		targetsManager:      targetsManager,
+		endpointResolver:    endpointResolver,
+		networkingManager:   networkingManager,
+		eventRecorder:       eventRecorder,
+		logger:              logger,
+		vpcID:               vpcID,
+		vpcInfoProvider:     vpcInfoProvider,
+		podInfoRepo:         podInfoRepo,
+		multiClusterManager: multiClusterManager,
 
 		targetHealthRequeueDuration: defaultTargetHealthRequeueDuration,
 	}
@@ -72,17 +69,16 @@ var _ ResourceManager = &defaultResourceManager{}
 
 // default implementation for ResourceManager.
 type defaultResourceManager struct {
-	k8sClient                   client.Client
-	targetsManager              TargetsManager
-	endpointResolver            backend.EndpointResolver
-	eksInfoResolver             networking.EKSInfoResolver
-	enableMultiClusterIPTargets bool
-	networkingManager           NetworkingManager
-	eventRecorder               record.EventRecorder
-	logger                      logr.Logger
-	vpcInfoProvider             networking.VPCInfoProvider
-	podInfoRepo                 k8s.PodInfoRepo
-	vpcID                       string
+	k8sClient           client.Client
+	targetsManager      TargetsManager
+	endpointResolver    backend.EndpointResolver
+	networkingManager   NetworkingManager
+	eventRecorder       record.EventRecorder
+	logger              logr.Logger
+	vpcInfoProvider     networking.VPCInfoProvider
+	podInfoRepo         k8s.PodInfoRepo
+	multiClusterManager MultiClusterManager
+	vpcID               string
 
 	targetHealthRequeueDuration time.Duration
 }
@@ -134,17 +130,9 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 
 	tgARN := tgb.Spec.TargetGroupARN
 	vpcID := tgb.Spec.VpcID
-	var targets []TargetInfo
-	if m.enableMultiClusterIPTargets {
-		targets, err = m.targetsManager.ListOwnedTargets(ctx, tgARN, m.eksInfoResolver)
-		if err != nil {
-			return err
-		}
-	} else {
-		targets, err = m.targetsManager.ListTargets(ctx, tgARN)
-		if err != nil {
-			return err
-		}
+	targets, err := m.targetsManager.ListTargets(ctx, tgARN, m.multiClusterManager.FilterTargets)
+	if err != nil {
+		return err
 	}
 
 	notDrainingTargets, drainingTargets := partitionTargetsByDrainingStatus(targets)
@@ -207,7 +195,7 @@ func (m *defaultResourceManager) reconcileWithInstanceTargetType(ctx context.Con
 		return err
 	}
 	tgARN := tgb.Spec.TargetGroupARN
-	targets, err := m.targetsManager.ListTargets(ctx, tgARN)
+	targets, err := m.targetsManager.ListTargets(ctx, tgARN, m.multiClusterManager.FilterTargets)
 	if err != nil {
 		return err
 	}
@@ -232,7 +220,7 @@ func (m *defaultResourceManager) reconcileWithInstanceTargetType(ctx context.Con
 }
 
 func (m *defaultResourceManager) cleanupTargets(ctx context.Context, tgb *elbv2api.TargetGroupBinding) error {
-	targets, err := m.targetsManager.ListTargets(ctx, tgb.Spec.TargetGroupARN)
+	targets, err := m.targetsManager.ListTargets(ctx, tgb.Spec.TargetGroupARN, m.multiClusterManager.FilterTargets)
 	if err != nil {
 		if isELBV2TargetGroupNotFoundError(err) {
 			return nil
