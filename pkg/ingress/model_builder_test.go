@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"encoding/json"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"testing"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"strconv"
 	"sync"
 
@@ -12,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"

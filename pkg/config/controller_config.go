@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/inject"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
@@ -28,6 +27,7 @@ const (
 	flagEnableEndpointSlices                         = "enable-endpoint-slices"
 	flagDisableRestrictedSGRules                     = "disable-restricted-sg-rules"
 	flagMultiClusterIPSubnetIds                      = "multi-cluster-ip-subnet-ids"
+	flagMultiClusterCIDRCacheTTLMinutes              = "multi-cluster-cidr-cache-ttl-minutes"
 	defaultLogLevel                                  = "info"
 	defaultMaxConcurrentReconciles                   = 3
 	defaultMaxExponentialBackoffDelay                = time.Second * 1000
@@ -35,17 +35,6 @@ const (
 	defaultEnableBackendSG                           = true
 	defaultEnableEndpointSlices                      = false
 	defaultDisableRestrictedSGRules                  = false
-)
-
-var (
-	trackingTagKeys = sets.NewString(
-		"elbv2.k8s.aws/cluster",
-		"elbv2.k8s.aws/resource",
-		"ingress.k8s.aws/stack",
-		"ingress.k8s.aws/resource",
-		"service.k8s.aws/stack",
-		"service.k8s.aws/resource",
-	)
 )
 
 // ControllerConfig contains the controller configuration
@@ -106,6 +95,9 @@ type ControllerConfig struct {
 	// MultiClusterSubnetIds specifies what subnets this controller should own
 	MultiClusterSubnetIds []string
 
+	// CIDRCacheTTLMinutes minutes to cache a CIDR resolution
+	CIDRCacheTTLMinutes int
+
 	FeatureGates FeatureGates
 }
 
@@ -139,6 +131,7 @@ func (cfg *ControllerConfig) BindFlags(fs *pflag.FlagSet) {
 	fs.StringToStringVar(&cfg.ServiceTargetENISGTags, flagServiceTargetENISGTags, nil,
 		"AWS Tags, in addition to cluster tags, for finding the target ENI security group to which to add inbound rules from NLBs")
 	fs.StringSliceVar(&cfg.MultiClusterSubnetIds, flagMultiClusterIPSubnetIds, nil, "Pass in a list of subnet IDs to use for MultiCluster IP mode. If using EKS, you don't have to specify this flag.")
+	fs.IntVar(&cfg.CIDRCacheTTLMinutes, flagMultiClusterCIDRCacheTTLMinutes, 30, "Number of minutes to cache a CIDR resolution")
 	cfg.FeatureGates.BindFlags(fs)
 	cfg.AWSConfig.BindFlags(fs)
 	cfg.RuntimeConfig.BindFlags(fs)

@@ -17,10 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"os"
-
-	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
-
 	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
 	zapraw "go.uber.org/zap"
@@ -28,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	elbv2controller "sigs.k8s.io/aws-load-balancer-controller/controllers/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/ingress"
@@ -35,6 +32,7 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/throttle"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
+	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/inject"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
@@ -107,7 +105,7 @@ func main() {
 	azInfoProvider := networking.NewDefaultAZInfoProvider(cloud.EC2(), ctrl.Log.WithName("az-info-provider"))
 	vpcInfoProvider := networking.NewDefaultVPCInfoProvider(cloud.EC2(), ctrl.Log.WithName("vpc-info-provider"))
 	subnetResolver := networking.NewDefaultSubnetsResolver(azInfoProvider, cloud.EC2(), cloud.VpcID(), controllerCFG.ClusterName, ctrl.Log.WithName("subnets-resolver"))
-	multiClusterManager := targetgroupbinding.NewMultiClusterManager(controllerCFG.ClusterName, controllerCFG.FeatureGates.Enabled(config.MultiClusterIPTargets), controllerCFG.MultiClusterSubnetIds, cloud.EC2(), cloud.EKS(), ctrl.Log)
+	multiClusterManager := targetgroupbinding.NewMultiClusterManager(controllerCFG.ClusterName, controllerCFG.FeatureGates.Enabled(config.MultiClusterIPTargets), controllerCFG.MultiClusterSubnetIds, cloud.EC2(), cloud.EKS(), cloud.ELBV2(), controllerCFG.CIDRCacheTTLMinutes, config.SharedTargetGroupTagKey, ctrl.Log)
 	tgbResManager := targetgroupbinding.NewDefaultResourceManager(mgr.GetClient(), cloud.ELBV2(), cloud.EC2(),
 		podInfoRepo, sgManager, sgReconciler, vpcInfoProvider, multiClusterManager,
 		cloud.VpcID(), controllerCFG.ClusterName, controllerCFG.FeatureGates.Enabled(config.EndpointsFailOpen), controllerCFG.EnableEndpointSlices, controllerCFG.DisableRestrictedSGRules,

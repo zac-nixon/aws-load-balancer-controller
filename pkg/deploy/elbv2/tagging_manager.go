@@ -2,6 +2,7 @@ package elbv2
 
 import (
 	"context"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 )
 

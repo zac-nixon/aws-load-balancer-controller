@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"testing"
 
 	elbv2sdk "github.com/aws/aws-sdk-go/service/elbv2"
@@ -17,7 +18,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"

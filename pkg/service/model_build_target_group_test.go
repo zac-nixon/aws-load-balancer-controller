@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
 	"sort"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 )
 

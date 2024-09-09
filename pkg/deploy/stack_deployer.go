@@ -26,28 +26,28 @@ type StackDeployer interface {
 func NewDefaultStackDeployer(cloud aws.Cloud, k8sClient client.Client,
 	networkingSGManager networking.SecurityGroupManager, networkingSGReconciler networking.SecurityGroupReconciler,
 	elbv2TaggingManager elbv2.TaggingManager,
-	config config.ControllerConfig, tagPrefix string, logger logr.Logger) *defaultStackDeployer {
+	controllerConfig config.ControllerConfig, tagPrefix string, logger logr.Logger) *defaultStackDeployer {
 
-	trackingProvider := tracking.NewDefaultProvider(tagPrefix, config.ClusterName)
+	trackingProvider := tracking.NewDefaultProvider(tagPrefix, controllerConfig.ClusterName)
 	ec2TaggingManager := ec2.NewDefaultTaggingManager(cloud.EC2(), networkingSGManager, cloud.VpcID(), logger)
 
 	return &defaultStackDeployer{
 		cloud:                               cloud,
 		k8sClient:                           k8sClient,
-		addonsConfig:                        config.AddonsConfig,
+		addonsConfig:                        controllerConfig.AddonsConfig,
 		trackingProvider:                    trackingProvider,
 		ec2TaggingManager:                   ec2TaggingManager,
-		ec2SGManager:                        ec2.NewDefaultSecurityGroupManager(cloud.EC2(), trackingProvider, ec2TaggingManager, networkingSGReconciler, cloud.VpcID(), config.ExternalManagedTags, logger),
+		ec2SGManager:                        ec2.NewDefaultSecurityGroupManager(cloud.EC2(), trackingProvider, ec2TaggingManager, networkingSGReconciler, cloud.VpcID(), controllerConfig.ExternalManagedTags, logger),
 		elbv2TaggingManager:                 elbv2TaggingManager,
-		elbv2LBManager:                      elbv2.NewDefaultLoadBalancerManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, config.ExternalManagedTags, logger),
-		elbv2LSManager:                      elbv2.NewDefaultListenerManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, config.ExternalManagedTags, config.FeatureGates, logger),
-		elbv2LRManager:                      elbv2.NewDefaultListenerRuleManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, config.ExternalManagedTags, config.FeatureGates, logger),
-		elbv2TGManager:                      elbv2.NewDefaultTargetGroupManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, cloud.VpcID(), config.ExternalManagedTags, logger),
+		elbv2LBManager:                      elbv2.NewDefaultLoadBalancerManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, controllerConfig.ExternalManagedTags, logger),
+		elbv2LSManager:                      elbv2.NewDefaultListenerManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, controllerConfig.ExternalManagedTags, controllerConfig.FeatureGates, logger),
+		elbv2LRManager:                      elbv2.NewDefaultListenerRuleManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, controllerConfig.ExternalManagedTags, controllerConfig.FeatureGates, logger),
+		elbv2TGManager:                      elbv2.NewDefaultTargetGroupManager(cloud.ELBV2(), trackingProvider, elbv2TaggingManager, cloud.VpcID(), controllerConfig.ExternalManagedTags, config.ImmutableTagKeys, logger),
 		elbv2TGBManager:                     elbv2.NewDefaultTargetGroupBindingManager(k8sClient, trackingProvider, logger),
 		wafv2WebACLAssociationManager:       wafv2.NewDefaultWebACLAssociationManager(cloud.WAFv2(), logger),
 		wafRegionalWebACLAssociationManager: wafregional.NewDefaultWebACLAssociationManager(cloud.WAFRegional(), logger),
 		shieldProtectionManager:             shield.NewDefaultProtectionManager(cloud.Shield(), logger),
-		featureGates:                        config.FeatureGates,
+		featureGates:                        controllerConfig.FeatureGates,
 		vpcID:                               cloud.VpcID(),
 		logger:                              logger,
 	}

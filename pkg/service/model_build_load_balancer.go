@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sort"
 	"strconv"
 
@@ -16,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"

@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"reflect"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"strconv"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -16,7 +17,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"

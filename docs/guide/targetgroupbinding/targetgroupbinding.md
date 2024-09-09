@@ -92,6 +92,27 @@ spec:
   ...
 ```
 
+## SharedTargetGroup
+TargetGroupBinding CR supports marking the target group ARN as shared. Doing so will place a tag that is only removable by an operator outside of the controller. This tag only allows controllers using the multicluster feature gate to operate on the target group. This tag will prevent misconfigured controllers from deregistering targets from the shared target group.
+
+!!!tip ""
+Setting this value will prevent misconfigured controllers from accidentally removing targets from a shared target group. The tag value is `aws-lbc-shared-targetgroup`
+
+
+## Sample YAML
+```yaml
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: my-tgb
+spec:
+  serviceRef:
+    name: awesome-service # route traffic to the awesome-service
+    port: 80
+  targetGroupARN: <arn-to-targetGroup>
+  sharedTargetGroup: true # Creates a tag on <arn-to-targetGroup> which blocks other controllers without the multicluster feature gate from operating on the target group.
+```
+
 
 ## Reference
 See the [reference](./spec.md) for TargetGroupBinding CR

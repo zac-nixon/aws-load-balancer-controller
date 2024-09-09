@@ -85,6 +85,10 @@ type TargetGroupBindingSpec struct {
 	// targetGroupARN is the Amazon Resource Name (ARN) for the TargetGroup.
 	TargetGroupARN core.StringToken `json:"targetGroupARN"`
 
+	// SharedTargetGroup signals that the target group is shared among different clusters
+	// +optional
+	SharedTargetGroup bool `json:"sharedTargetGroup,omitempty"`
+
 	// targetType is the TargetType of TargetGroup. If unspecified, it will be automatically inferred.
 	// +optional
 	TargetType *elbv2api.TargetType `json:"targetType,omitempty"`

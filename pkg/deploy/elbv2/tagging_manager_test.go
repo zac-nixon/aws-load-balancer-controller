@@ -3,6 +3,7 @@ package elbv2
 import (
 	"context"
 	"k8s.io/apimachinery/pkg/util/cache"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"testing"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -11,7 +12,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )

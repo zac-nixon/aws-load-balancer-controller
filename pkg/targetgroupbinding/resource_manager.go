@@ -78,15 +78,30 @@ type defaultResourceManager struct {
 	vpcInfoProvider     networking.VPCInfoProvider
 	podInfoRepo         k8s.PodInfoRepo
 	multiClusterManager MultiClusterManager
-	vpcID               string
+
+	vpcID string
 
 	targetHealthRequeueDuration time.Duration
 }
 
 func (m *defaultResourceManager) Reconcile(ctx context.Context, tgb *elbv2api.TargetGroupBinding) error {
+	m.logger.Info("Reconciling TargetGroupBinding", "shared", tgb.Spec.SharedTargetGroup)
 	if tgb.Spec.TargetType == nil {
 		return errors.Errorf("targetType is not specified: %v", k8s.NamespacedName(tgb).String())
 	}
+
+	err := m.multiClusterManager.CheckedSharedTargetGroup(tgb.Spec.TargetGroupARN)
+	if err != nil {
+		return err
+	}
+
+	if tgb.Spec.SharedTargetGroup {
+		err = m.multiClusterManager.MarkSharedTargetGroup(tgb.Spec.TargetGroupARN)
+		if err != nil {
+			return err
+		}
+	}
+
 	if *tgb.Spec.TargetType == elbv2api.TargetTypeIP {
 		return m.reconcileWithIPTargetType(ctx, tgb)
 	}
