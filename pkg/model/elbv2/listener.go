@@ -2,7 +2,6 @@ package elbv2
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 )
@@ -193,14 +192,6 @@ type AuthenticateOIDCActionConfig struct {
 
 	// The OAuth 2.0 client secret.
 	ClientSecret string `json:"clientSecret"`
-}
-
-func (cfg AuthenticateOIDCActionConfig) MarshalJSON() ([]byte, error) {
-	type redactedCFG AuthenticateOIDCActionConfig
-	redactedCfg := redactedCFG(cfg)
-	redactedCfg.ClientID = "[REDACTED]"
-	redactedCfg.ClientSecret = "[REDACTED]"
-	return json.Marshal(redactedCfg)
 }
 
 // Information about an action that returns a custom HTTP response.

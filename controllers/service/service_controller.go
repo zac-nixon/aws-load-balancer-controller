@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -11,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/service/eventhandlers"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
@@ -106,7 +105,7 @@ func (r *serviceReconciler) reconcile(ctx context.Context, req ctrl.Request) err
 		return r.cleanupLoadBalancerResources(ctx, svc, stack)
 	}
 
-	currentCheckpoint := r.computeReconcileCheckpoint(ctx, stackJSON)
+	currentCheckpoint := algorithm.ComputeSha256(stackJSON)
 	originalCheckpoint := r.getReconcileCheckpoint(ctx, svc)
 	if currentCheckpoint == originalCheckpoint {
 		r.logger.Info("service hasn't changed, skip deploying model")
@@ -132,7 +131,7 @@ func (r *serviceReconciler) buildModel(ctx context.Context, svc *corev1.Service)
 		r.eventRecorder.Event(svc, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
 		return nil, nil, false, "", err
 	}
-	r.logger.Info("successfully built model", "model", stackJSON)
+	r.logger.Info("successfully built model")
 	return stack, lb, backendSGRequired, stackJSON, nil
 }
 
@@ -220,12 +219,6 @@ func (r *serviceReconciler) cleanupServiceStatus(ctx context.Context, svc *corev
 		return errors.Wrapf(err, "failed to cleanup service status: %v", k8s.NamespacedName(svc))
 	}
 	return nil
-}
-
-func (r *serviceReconciler) computeReconcileCheckpoint(_ context.Context, stackJSON string) string {
-	checkpointHash := sha256.New()
-	_, _ = checkpointHash.Write([]byte(stackJSON))
-	return base64.RawURLEncoding.EncodeToString(checkpointHash.Sum(nil))
 }
 
 func (r *serviceReconciler) getReconcileCheckpoint(_ context.Context, svc *corev1.Service) string {

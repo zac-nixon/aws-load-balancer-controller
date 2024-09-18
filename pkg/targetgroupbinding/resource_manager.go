@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
+	"slices"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/tools/record"
@@ -126,6 +130,20 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 		return err
 	}
 
+	endpointStrings := make([]string, 0, len(endpoints))
+
+	for _, ep := range endpoints {
+		endpointStrings = append(endpointStrings, ep.GetIdentifier())
+	}
+
+	currentCheckPoint := calculateEndpointHash(endpointStrings)
+	savedCheckPoint := m.getReconcileCheckpoint(tgb)
+
+	if currentCheckPoint == savedCheckPoint {
+		m.logger.Info("Skipping targetgroupbinding reconcile", "targetgroupbinding name", k8s.NamespacedName(tgb))
+		return nil
+	}
+
 	tgARN := tgb.Spec.TargetGroupARN
 	vpcID := tgb.Spec.VpcID
 	targets, err := m.targetsManager.ListTargets(ctx, tgARN)
@@ -172,7 +190,8 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 	if needNetworkingRequeue {
 		return runtime.NewRequeueNeeded("networking reconciliation")
 	}
-	return nil
+
+	return m.saveReconcileCheckpoint(ctx, tgb, currentCheckPoint)
 }
 
 func (m *defaultResourceManager) reconcileWithInstanceTargetType(ctx context.Context, tgb *elbv2api.TargetGroupBinding) error {
@@ -191,6 +210,21 @@ func (m *defaultResourceManager) reconcileWithInstanceTargetType(ctx context.Con
 		}
 		return err
 	}
+
+	endpointStrings := make([]string, 0, len(endpoints))
+
+	for _, ep := range endpoints {
+		endpointStrings = append(endpointStrings, ep.GetIdentifier())
+	}
+
+	currentCheckPoint := calculateEndpointHash(endpointStrings)
+	savedCheckPoint := m.getReconcileCheckpoint(tgb)
+
+	if currentCheckPoint == savedCheckPoint {
+		m.logger.Info("Skipping targetgroupbinding reconcile", "targetgroupbinding name", k8s.NamespacedName(tgb))
+		return nil
+	}
+
 	tgARN := tgb.Spec.TargetGroupARN
 	targets, err := m.targetsManager.ListTargets(ctx, tgARN)
 	if err != nil {
@@ -213,7 +247,7 @@ func (m *defaultResourceManager) reconcileWithInstanceTargetType(ctx context.Con
 		}
 	}
 	_ = drainingTargets
-	return nil
+	return m.saveReconcileCheckpoint(ctx, tgb, savedCheckPoint)
 }
 
 func (m *defaultResourceManager) cleanupTargets(ctx context.Context, tgb *elbv2api.TargetGroupBinding) error {
@@ -432,6 +466,27 @@ func (m *defaultResourceManager) registerNodePortEndpoints(ctx context.Context, 
 	return m.targetsManager.RegisterTargets(ctx, tgARN, sdkTargets)
 }
 
+func (m *defaultResourceManager) getReconcileCheckpoint(tgb *elbv2api.TargetGroupBinding) string {
+	if checkPoint, ok := tgb.Annotations[annotations.AnnotationCheckPoint]; ok {
+		return checkPoint
+	}
+	return ""
+}
+
+func (r *defaultResourceManager) saveReconcileCheckpoint(ctx context.Context, tgb *elbv2api.TargetGroupBinding, checkpoint string) error {
+	tgbNew := tgb.DeepCopy()
+
+	if tgbNew.Annotations == nil {
+		tgbNew.Annotations = map[string]string{}
+	}
+
+	tgbNew.Annotations[annotations.AnnotationCheckPoint] = checkpoint
+	if err := r.k8sClient.Patch(ctx, tgbNew, client.MergeFrom(tgb)); err != nil {
+		return errors.Wrapf(err, "failed to update reconcile checkpoint: %v", k8s.NamespacedName(tgb))
+	}
+	return nil
+}
+
 type podEndpointAndTargetPair struct {
 	endpoint backend.PodEndpoint
 	target   TargetInfo
@@ -530,6 +585,12 @@ func matchNodePortEndpointWithTargets(endpoints []backend.NodePortEndpoint, targ
 		unmatchedTargets = append(unmatchedTargets, targetsByUID[uid])
 	}
 	return matchedEndpointAndTargets, unmatchedEndpoints, unmatchedTargets
+}
+
+func calculateEndpointHash(endpoints []string) string {
+	slices.Sort(endpoints)
+	csv := strings.Join(endpoints, ",")
+	return algorithm.ComputeSha256(csv)
 }
 
 func isELBV2TargetGroupNotFoundError(err error) bool {

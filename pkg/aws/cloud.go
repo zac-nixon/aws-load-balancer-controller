@@ -3,9 +3,11 @@ package aws
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/client"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -91,7 +93,18 @@ func NewCloud(cfg CloudConfig, metricsRegisterer prometheus.Registerer, logger l
 		}
 		cfg.Region = region
 	}
-	awsCFG := aws.NewConfig().WithRegion(cfg.Region).WithSTSRegionalEndpoint(endpoints.RegionalSTSEndpoint).WithMaxRetries(cfg.MaxRetries).WithEndpointResolver(endpointsResolver)
+
+	clientRetryer := client.DefaultRetryer{
+		NumMaxRetries:    cfg.MaxRetries,
+		MinRetryDelay:    time.Millisecond * 100,
+		MinThrottleDelay: time.Millisecond * 100,
+		MaxRetryDelay:    time.Second * 10,
+		MaxThrottleDelay: time.Second * 10,
+	}
+
+	awsCFG := aws.NewConfig().WithRegion(cfg.Region).WithSTSRegionalEndpoint(endpoints.RegionalSTSEndpoint).WithEndpointResolver(endpointsResolver)
+	awsCFG.Retryer = clientRetryer
+
 	opts = session.Options{}
 	opts.Config.MergeIn(awsCFG)
 	if !hasIPv4 {

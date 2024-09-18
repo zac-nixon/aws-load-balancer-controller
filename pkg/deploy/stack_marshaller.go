@@ -23,6 +23,7 @@ func (m *defaultStackMarshaller) Marshal(stack core.Stack) (string, error) {
 	if err := stack.TopologicalTraversal(builder); err != nil {
 		return "", err
 	}
+
 	stackSchema := builder.Build()
 	payload, err := json.Marshal(stackSchema)
 	if err != nil {
