@@ -178,12 +178,12 @@ func (r *groupReconciler) buildAndDeployModel(ctx context.Context, ingGroup ingr
 			r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedDeployModel, fmt.Sprintf("Failed deploy model due to %v", err))
 			return nil, nil, false, err
 		}
-		r.logger.Info("successfully deployed model", "ingressGroup", ingGroup.ID, "json", stackJSON)
+		r.logger.Info("successfully deployed model", "ingressGroup", ingGroup.ID)
 		if err := r.saveReconcileCheckpoint(ctx, ingGroup, currentCheckpoint); err != nil {
 			return nil, nil, false, err
 		}
 	} else {
-		r.logger.Info("ingress hasn't changed, skip deploying model", "ingressGroup", ingGroup.ID, "json", stackJSON)
+		r.logger.Info("ingress hasn't changed, skip deploying model", "ingressGroup", ingGroup.ID)
 	}
 
 	r.secretsManager.MonitorSecrets(ingGroup.ID.String(), secrets)
