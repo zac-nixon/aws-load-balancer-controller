@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
+	"sort"
+	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
 	ec2sdk "github.com/aws/aws-sdk-go/service/ec2"
@@ -56,15 +59,15 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, liste
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	coIPv4Pool, err := t.buildLoadBalancerCOIPv4Pool(ctx)
+	coIPv4Pool, err := t.buildLoadBalancerCOIPv4Pool()
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	loadBalancerAttributes, err := t.buildLoadBalancerAttributes(ctx)
+	loadBalancerAttributes, err := t.buildLoadBalancerAttributes()
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	tags, err := t.buildLoadBalancerTags(ctx)
+	tags, err := t.buildLoadBalancerTags()
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
@@ -72,6 +75,18 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, liste
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
+
+	// We should sort the security groups here as well, but that it is costly to resolve the SG ids from the token.
+	// Instead, we sort within buildLoadBalancerSecurityGroups().
+
+	slices.SortFunc(loadBalancerAttributes, func(a, b elbv2model.LoadBalancerAttribute) int {
+		return strings.Compare(a.Key, b.Key)
+	})
+
+	slices.SortFunc(subnetMappings, func(a, b elbv2model.SubnetMapping) int {
+		return strings.Compare(a.SubnetID, b.SubnetID)
+	})
+
 	return elbv2model.LoadBalancerSpec{
 		Name:                   name,
 		Type:                   elbv2model.LoadBalancerTypeApplication,
@@ -273,7 +288,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerSubnetMappings(ctx context.Cont
 }
 
 func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Context, listenPortConfigByPort map[int64]listenPortConfig, ipAddressType elbv2model.IPAddressType) ([]core.StringToken, error) {
-	sgNameOrIDsViaAnnotation, err := t.buildFrontendSGNameOrIDsFromAnnotation(ctx)
+	sgNameOrIDsViaAnnotation, err := t.buildFrontendSGNameOrIDsFromAnnotation()
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +320,8 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 		if err != nil {
 			return nil, err
 		}
+
+		sort.Strings(frontendSGIDs)
 		for _, sgID := range frontendSGIDs {
 			lbSGTokens = append(lbSGTokens, core.LiteralStringToken(sgID))
 		}
@@ -326,7 +343,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 	return lbSGTokens, nil
 }
 
-func (t *defaultModelBuildTask) buildFrontendSGNameOrIDsFromAnnotation(ctx context.Context) ([]string, error) {
+func (t *defaultModelBuildTask) buildFrontendSGNameOrIDsFromAnnotation() ([]string, error) {
 	var explicitSGNameOrIDsList [][]string
 	for _, member := range t.ingGroup.Members {
 		var rawSGNameOrIDs []string
@@ -347,7 +364,7 @@ func (t *defaultModelBuildTask) buildFrontendSGNameOrIDsFromAnnotation(ctx conte
 	return chosenSGNameOrIDs, nil
 }
 
-func (t *defaultModelBuildTask) buildLoadBalancerCOIPv4Pool(_ context.Context) (*string, error) {
+func (t *defaultModelBuildTask) buildLoadBalancerCOIPv4Pool() (*string, error) {
 	explicitCOIPv4Pools := sets.NewString()
 	for _, member := range t.ingGroup.Members {
 		rawCOIPv4Pool := ""
@@ -372,7 +389,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerCOIPv4Pool(_ context.Context) (
 	return &rawCOIPv4Pool, nil
 }
 
-func (t *defaultModelBuildTask) buildLoadBalancerAttributes(_ context.Context) ([]elbv2model.LoadBalancerAttribute, error) {
+func (t *defaultModelBuildTask) buildLoadBalancerAttributes() ([]elbv2model.LoadBalancerAttribute, error) {
 	ingGroupAttributes, err := t.buildIngressGroupLoadBalancerAttributes(t.ingGroup.Members)
 	if err != nil {
 		return nil, err
@@ -387,7 +404,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerAttributes(_ context.Context) (
 	return attributes, nil
 }
 
-func (t *defaultModelBuildTask) buildLoadBalancerTags(_ context.Context) (map[string]string, error) {
+func (t *defaultModelBuildTask) buildLoadBalancerTags() (map[string]string, error) {
 	ingGroupTags, err := t.buildIngressGroupResourceTags(t.ingGroup.Members)
 	if err != nil {
 		return nil, err
@@ -402,6 +419,7 @@ func buildLoadBalancerSubnetMappingsWithSubnets(subnets []*ec2sdk.Subnet) []elbv
 			SubnetID: awssdk.StringValue(subnet.SubnetId),
 		})
 	}
+
 	return subnetMappings
 }
 

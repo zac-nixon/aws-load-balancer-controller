@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"regexp"
-
 	awssdk "github.com/aws/aws-sdk-go/aws"
+	"regexp"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	ec2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/ec2"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
+	"slices"
 )
 
 const (
@@ -34,6 +34,11 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupSpec(ctx context.Contex
 		return ec2model.SecurityGroupSpec{}, err
 	}
 	ingressPermissions := t.buildManagedSecurityGroupIngressPermissions(ctx, listenPortConfigByPort, ipAddressType)
+
+	slices.SortFunc(ingressPermissions, func(a, b ec2model.IPPermission) int {
+		return int(*a.FromPort - *b.FromPort)
+	})
+
 	return ec2model.SecurityGroupSpec{
 		GroupName:   name,
 		Description: "[k8s] Managed SecurityGroup for LoadBalancer",
@@ -83,6 +88,7 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupIngressPermissions(_ co
 				},
 			})
 		}
+
 		if isIPv6Supported(ipAddressType) {
 			for _, cidr := range cfg.inboundCIDRv6s {
 				permissions = append(permissions, ec2model.IPPermission{

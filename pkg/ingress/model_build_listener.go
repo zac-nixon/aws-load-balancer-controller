@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	elbv2sdk "github.com/aws/aws-sdk-go/service/elbv2"
-	"k8s.io/utils/strings/slices"
 	"net"
+	"slices"
 	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -46,6 +46,11 @@ func (t *defaultModelBuildTask) buildListenerSpec(ctx context.Context, lbARN cor
 			CertificateARN: awssdk.String(certARN),
 		})
 	}
+
+	slices.SortFunc(certs, func(a, b elbv2model.Certificate) int {
+		return strings.Compare(*a.CertificateARN, *b.CertificateARN)
+	})
+
 	return elbv2model.ListenerSpec{
 		LoadBalancerARN:      lbARN,
 		Port:                 port,

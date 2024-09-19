@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,6 +78,11 @@ func (t *defaultModelBuildTask) buildTargetGroupSpec(ctx context.Context, tgProt
 	if err != nil {
 		return elbv2model.TargetGroupSpec{}, err
 	}
+
+	slices.SortFunc(tgAttrs, func(a, b elbv2model.TargetGroupAttribute) int {
+		return strings.Compare(a.Key, b.Key)
+	})
+
 	return elbv2model.TargetGroupSpec{
 		Name:                  tgName,
 		TargetType:            targetType,

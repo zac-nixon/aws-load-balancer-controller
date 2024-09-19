@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"reflect"
+	"sort"
 	"strconv"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -270,9 +271,6 @@ func (t *defaultModelBuildTask) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
 	for port, cfg := range listenPortConfigByPort {
 		ingList := ingListByPort[port]
 		ls, err := t.buildListener(ctx, lb.LoadBalancerARN(), port, cfg, ingList)
@@ -381,11 +379,18 @@ func (t *defaultModelBuildTask) mergeListenPortConfigs(_ context.Context, listen
 		mergedSSLPolicy = awssdk.String(t.defaultSSLPolicy)
 	}
 
+	inboundCIDRv4s := mergedInboundCIDRv4s.List()
+	inboundCIDRv6s := mergedInboundCIDRv6s.List()
+	prefixLists := mergedInboundPrefixLists.List()
+	sort.Strings(inboundCIDRv4s)
+	sort.Strings(inboundCIDRv6s)
+	sort.Strings(prefixLists)
+
 	return listenPortConfig{
 		protocol:             mergedProtocol,
-		inboundCIDRv4s:       mergedInboundCIDRv4s.List(),
-		inboundCIDRv6s:       mergedInboundCIDRv6s.List(),
-		prefixLists:          mergedInboundPrefixLists.List(),
+		inboundCIDRv4s:       inboundCIDRv4s,
+		inboundCIDRv6s:       inboundCIDRv6s,
+		prefixLists:          prefixLists,
 		sslPolicy:            mergedSSLPolicy,
 		tlsCerts:             mergedTLSCerts,
 		mutualAuthentication: mergedMtlsAttributes,

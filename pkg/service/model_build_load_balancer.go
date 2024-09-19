@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
 	ec2sdk "github.com/aws/aws-sdk-go/service/ec2"
@@ -53,7 +55,7 @@ func (t *defaultModelBuildTask) buildLoadBalancer(ctx context.Context, scheme el
 
 func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, scheme elbv2model.LoadBalancerScheme,
 	existingLB *elbv2deploy.LoadBalancerWithTags) (elbv2model.LoadBalancerSpec, error) {
-	ipAddressType, err := t.buildLoadBalancerIPAddressType(ctx)
+	ipAddressType, err := t.buildLoadBalancerIPAddressType()
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
@@ -81,6 +83,17 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, schem
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
+
+	// We should sort the security groups here as well, but that it is costly to resolve the SG ids from the token.
+	// Instead, we sort within buildLoadBalancerSecurityGroups().
+
+	slices.SortFunc(subnetMappings, func(a, b elbv2model.SubnetMapping) int {
+		return strings.Compare(a.SubnetID, b.SubnetID)
+	})
+
+	slices.SortFunc(lbAttributes, func(a, b elbv2model.LoadBalancerAttribute) int {
+		return strings.Compare(a.Key, b.Key)
+	})
 
 	spec := elbv2model.LoadBalancerSpec{
 		Name:                   name,
@@ -132,7 +145,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 			lbSGTokens = append(lbSGTokens, t.backendSGIDToken)
 		}
 	} else {
-		manageBackendSGRules, err := t.buildManageSecurityGroupRulesFlag(ctx)
+		manageBackendSGRules, err := t.buildManageSecurityGroupRulesFlag()
 		if err != nil {
 			return nil, err
 		}
@@ -140,6 +153,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 		if err != nil {
 			return nil, err
 		}
+		sort.Strings(frontendSGIDs)
 		for _, sgID := range frontendSGIDs {
 			lbSGTokens = append(lbSGTokens, core.LiteralStringToken(sgID))
 		}
@@ -159,7 +173,7 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 	return lbSGTokens, nil
 }
 
-func (t *defaultModelBuildTask) buildManageSecurityGroupRulesFlag(ctx context.Context) (bool, error) {
+func (t *defaultModelBuildTask) buildManageSecurityGroupRulesFlag() (bool, error) {
 	var rawEnabled bool
 	exists, err := t.annotationParser.ParseBoolAnnotation(annotations.SvcLBSuffixManageSGRules, &rawEnabled, t.service.Annotations)
 	if err != nil {
@@ -171,7 +185,7 @@ func (t *defaultModelBuildTask) buildManageSecurityGroupRulesFlag(ctx context.Co
 	return false, nil
 }
 
-func (t *defaultModelBuildTask) buildLoadBalancerIPAddressType(_ context.Context) (elbv2model.IPAddressType, error) {
+func (t *defaultModelBuildTask) buildLoadBalancerIPAddressType() (elbv2model.IPAddressType, error) {
 	rawIPAddressType := ""
 	if exists := t.annotationParser.ParseStringAnnotation(annotations.SvcLBSuffixIPAddressType, &rawIPAddressType, t.service.Annotations); !exists {
 		return t.defaultIPAddressType, nil

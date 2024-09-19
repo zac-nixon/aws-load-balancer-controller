@@ -1111,13 +1111,13 @@ func Test_defaultModelBuilder_Build(t *testing.T) {
 				"spec": {
 					"certificates": [
 						{
+							"certificateARN": "arn:aws:acm:us-east-1:9999999:certificate/11111111"
+						},
+						{
 							"certificateARN": "arn:aws:acm:us-east-1:9999999:certificate/22222222"
 						},
 						{
 							"certificateARN": "arn:aws:acm:us-east-1:9999999:certificate/33333333"
-						},
-						{
-							"certificateARN": "arn:aws:acm:us-east-1:9999999:certificate/11111111"
 						}
 					],
 					"defaultActions": [

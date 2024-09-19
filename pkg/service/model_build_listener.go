@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/pkg/errors"
@@ -70,6 +72,11 @@ func (t *defaultModelBuildTask) buildListenerSpec(ctx context.Context, port core
 	if listenerProtocol == elbv2model.ProtocolTLS {
 		sslPolicy = cfg.sslPolicy
 		certificates = cfg.certificates
+
+		slices.SortFunc(certificates, func(a, b elbv2model.Certificate) int {
+			return strings.Compare(*a.CertificateARN, *b.CertificateARN)
+		})
+
 	}
 
 	defaultActions := t.buildListenerDefaultActions(ctx, targetGroup)

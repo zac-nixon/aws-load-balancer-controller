@@ -2,6 +2,8 @@ package ingress
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -14,7 +16,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/ingress/eventhandlers"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
@@ -130,12 +131,12 @@ func (r *groupReconciler) reconcile(ctx context.Context, req ctrl.Request) error
 		r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedAddFinalizer, fmt.Sprintf("Failed add finalizer due to %v", err))
 		return err
 	}
-	_, lb, err := r.buildAndDeployModel(ctx, ingGroup)
+	_, lb, change, err := r.buildAndDeployModel(ctx, ingGroup)
 	if err != nil {
 		return err
 	}
 
-	if len(ingGroup.Members) > 0 && lb != nil {
+	if change && len(ingGroup.Members) > 0 && lb != nil {
 		lbDNS, err := lb.DNSName().Resolve(ctx)
 		if err != nil {
 			return err
@@ -157,33 +158,32 @@ func (r *groupReconciler) reconcile(ctx context.Context, req ctrl.Request) error
 	return nil
 }
 
-func (r *groupReconciler) buildAndDeployModel(ctx context.Context, ingGroup ingress.Group) (core.Stack, *elbv2model.LoadBalancer, error) {
+func (r *groupReconciler) buildAndDeployModel(ctx context.Context, ingGroup ingress.Group) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack, lb, secrets, backendSGRequired, err := r.modelBuilder.Build(ctx, ingGroup)
 	if err != nil {
 		r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
 	stackJSON, err := r.stackMarshaller.Marshal(stack)
 	if err != nil {
 		r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	r.logger.Info("successfully built model")
-	currentCheckpoint := algorithm.ComputeSha256(stackJSON)
+	currentCheckpoint := r.computeReconcileCheckpoint(ctx, stackJSON)
 
-	if r.isIngressChanged(ctx, ingGroup, currentCheckpoint) {
+	changed := r.isIngressChanged(ctx, ingGroup, currentCheckpoint)
+	if changed {
 		if err := r.stackDeployer.Deploy(ctx, stack); err != nil {
 			r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedDeployModel, fmt.Sprintf("Failed deploy model due to %v", err))
-			return nil, nil, err
+			return nil, nil, false, err
 		}
-		r.logger.Info("successfully deployed model", "ingressGroup", ingGroup.ID)
+		r.logger.Info("successfully deployed model", "ingressGroup", ingGroup.ID, "json", stackJSON)
 		if err := r.saveReconcileCheckpoint(ctx, ingGroup, currentCheckpoint); err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 	} else {
-		r.logger.Info("ingress hasn't changed, skip deploying model", "ingressGroup", ingGroup.ID)
-		return nil, nil, nil
+		r.logger.Info("ingress hasn't changed, skip deploying model", "ingressGroup", ingGroup.ID, "json", stackJSON)
 	}
 
 	r.secretsManager.MonitorSecrets(ingGroup.ID.String(), secrets)
@@ -193,9 +193,9 @@ func (r *groupReconciler) buildAndDeployModel(ctx context.Context, ingGroup ingr
 		inactiveResources = append(inactiveResources, k8s.ToSliceOfNamespacedNames(ingGroup.Members)...)
 	}
 	if err := r.backendSGProvider.Release(ctx, networkingpkg.ResourceTypeIngress, inactiveResources); err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	return stack, lb, nil
+	return stack, lb, changed, nil
 }
 
 func (r *groupReconciler) recordIngressGroupEvent(_ context.Context, ingGroup ingress.Group, eventType string, reason string, message string) {
@@ -230,6 +230,13 @@ func (r *groupReconciler) updateIngressStatus(ctx context.Context, lbDNS string,
 	return nil
 }
 
+// computeReconcileCheckpoint computes a checkpoint based on generated stack json.
+func (r *groupReconciler) computeReconcileCheckpoint(_ context.Context, stackJSON string) string {
+	checkpointHash := sha256.New()
+	_, _ = checkpointHash.Write([]byte(stackJSON))
+	return base64.RawURLEncoding.EncodeToString(checkpointHash.Sum(nil))
+}
+
 // getReconcileCheckpoint retrieves the last known reconciled checkpoint for the ingress group.
 func (r *groupReconciler) getReconcileCheckpoint(_ context.Context, ingGroup ingress.Group) string {
 	checkpoints := sets.NewString()
@@ -248,6 +255,7 @@ func (r *groupReconciler) getReconcileCheckpoint(_ context.Context, ingGroup ing
 // saveReconcileCheckpoint persists reconcile checkpoint into ingressGroup as annotation
 func (r *groupReconciler) saveReconcileCheckpoint(ctx context.Context, ingGroup ingress.Group, checkpoint string) error {
 	for _, member := range ingGroup.Members {
+		r.logger.Info("saving reconcile checkpoint", "ingressMember", member)
 		if ingCheckpoint := member.Ing.Annotations[annotations.AnnotationCheckPoint]; ingCheckpoint != checkpoint {
 			ingNew := member.Ing.DeepCopy()
 			ingNew.Annotations[annotations.AnnotationCheckPoint] = checkpoint

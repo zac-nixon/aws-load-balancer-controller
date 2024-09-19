@@ -1235,7 +1235,7 @@ func Test_defaultModelBuildTask_buildLoadBalancerIPAddressType(t *testing.T) {
 				defaultIPAddressType: elbv2.IPAddressTypeIPV4,
 			}
 
-			got, err := builder.buildLoadBalancerIPAddressType(context.Background())
+			got, err := builder.buildLoadBalancerIPAddressType()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildLoadBalancerIPAddressType() error = %v, wantErr %v", err, tt.wantErr)
 				return

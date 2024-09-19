@@ -2,13 +2,13 @@ package ingress
 
 import (
 	"context"
-
 	awssdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
 	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sort"
 )
 
 const (
@@ -80,7 +80,10 @@ func (i *defaultReferenceIndexer) BuildServiceRefIndexes(ctx context.Context, in
 		serviceNamesFromBackend := extractServiceNamesFromAction(enhancedBackend.Action)
 		serviceNames.Insert(serviceNamesFromBackend...)
 	}
-	return serviceNames.List()
+
+	serviceList := serviceNames.List()
+	sort.Strings(serviceList)
+	return serviceList
 }
 
 func (i *defaultReferenceIndexer) BuildSecretRefIndexes(ctx context.Context, ingOrSvc client.Object) []string {

@@ -228,7 +228,7 @@ func Test_defaultModelBuildTask_buildLoadBalancerCOIPv4Pool(t *testing.T) {
 				annotationParser: annotationParser,
 				ingGroup:         tt.fields.ingGroup,
 			}
-			got, err := task.buildLoadBalancerCOIPv4Pool(context.Background())
+			got, err := task.buildLoadBalancerCOIPv4Pool()
 			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			} else {
@@ -483,7 +483,7 @@ func Test_defaultModelBuildTask_buildLoadBalancerTags(t *testing.T) {
 				externalManagedTags: tt.fields.externalManagedTags,
 				annotationParser:    annotations.NewSuffixAnnotationParser("alb.ingress.kubernetes.io"),
 			}
-			got, err := task.buildLoadBalancerTags(context.Background())
+			got, err := task.buildLoadBalancerTags()
 			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			} else {

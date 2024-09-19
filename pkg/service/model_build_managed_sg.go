@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go/aws"
@@ -39,6 +40,11 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupSpec(ctx context.Contex
 	if err != nil {
 		return ec2model.SecurityGroupSpec{}, err
 	}
+
+	slices.SortFunc(ingressPermissions, func(a, b ec2model.IPPermission) int {
+		return int(*a.FromPort - *b.FromPort)
+	})
+
 	return ec2model.SecurityGroupSpec{
 		GroupName:   name,
 		Description: "[k8s] Managed SecurityGroup for LoadBalancer",

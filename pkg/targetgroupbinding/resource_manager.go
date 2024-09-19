@@ -590,6 +590,8 @@ func matchNodePortEndpointWithTargets(endpoints []backend.NodePortEndpoint, targ
 func calculateEndpointHash(endpoints []string) string {
 	slices.Sort(endpoints)
 	csv := strings.Join(endpoints, ",")
+	//s, _ := goutils.RandomAscii(50)
+	//return s
 	return algorithm.ComputeSha256(csv)
 }
 

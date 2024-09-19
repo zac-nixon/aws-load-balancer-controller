@@ -5,19 +5,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"regexp"
-	"strconv"
-
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"regexp"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
+	"slices"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -161,6 +162,7 @@ func (t *defaultModelBuildTask) buildTargetGroupSpec(ctx context.Context,
 	if err != nil {
 		return elbv2model.TargetGroupSpec{}, err
 	}
+
 	tags, err := t.buildTargetGroupTags(ctx, ing, svc)
 	if err != nil {
 		return elbv2model.TargetGroupSpec{}, err
@@ -171,6 +173,11 @@ func (t *defaultModelBuildTask) buildTargetGroupSpec(ctx context.Context,
 	}
 	tgPort := t.buildTargetGroupPort(ctx, targetType, svcPort)
 	name := t.buildTargetGroupName(ctx, k8s.NamespacedName(ing.Ing), svc, port, tgPort, targetType, tgProtocol, tgProtocolVersion)
+
+	slices.SortFunc(tgAttributes, func(a, b elbv2model.TargetGroupAttribute) int {
+		return strings.Compare(a.Key, b.Key)
+	})
+
 	return elbv2model.TargetGroupSpec{
 		Name:                  name,
 		TargetType:            targetType,
