@@ -6815,6 +6815,7 @@ func Test_defaultModelBuilderTask_Build(t *testing.T) {
              "securityGroupsInboundRulesOnPrivateLink":"on",
              "enablePrefixForIpv6SourceNat": "off",
              "ipAddressType":"ipv4",
+             "enablePrefixForIpv6SourceNat": "off",
              "subnetMapping":[
                 {
                    "subnetID":"subnet-1"
