@@ -54,7 +54,6 @@ func Test_computeIngressListenPortConfigByPort_MutualAuthentication(t *testing.T
 			},
 			want: []WantStruct{{port: 443, mutualAuth: &(elbv2.MutualAuthenticationAttributes{Mode: "off", TrustStoreArn: nil, IgnoreClientCertificateExpiry: nil})}, {port: 80, mutualAuth: &(elbv2.MutualAuthenticationAttributes{Mode: "passthrough", TrustStoreArn: nil, IgnoreClientCertificateExpiry: nil})}},
 		},
-
 		{
 
 			name: "Listener Config when MutualAuthentication annotation is not specified",
@@ -78,6 +77,30 @@ func Test_computeIngressListenPortConfigByPort_MutualAuthentication(t *testing.T
 				},
 			},
 			want: []WantStruct{{port: 443, mutualAuth: nil}, {port: 80, mutualAuth: nil}},
+		},
+		{
+			name: "Listener Config when MutualAuthentication annotation is specified with advertise trust store CA not set",
+			fields: fields{
+				ingGroup: Group{
+					ID: GroupID{Name: "explicit-group"},
+					Members: []ClassifiedIngress{
+						{
+							Ing: &networking.Ingress{
+								ObjectMeta: metav1.ObjectMeta{
+									Namespace: "awesome-ns",
+									Name:      "ing-1",
+									Annotations: map[string]string{
+										"alb.ingress.kubernetes.io/listen-ports":          `[{"HTTPS": 443}, {"HTTPS": 80}]`,
+										"alb.ingress.kubernetes.io/mutual-authentication": `[{"port":443,"mode":"off"}, {"port":80,"mode":"passthrough"}]`,
+										"alb.ingress.kubernetes.io/certificate-arn":       "arn:aws:iam::123456789:server-certificate/new-clb-cert",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []WantStruct{{port: 443, mutualAuth: &(elbv2.MutualAuthenticationAttributes{Mode: "off", TrustStoreArn: nil, IgnoreClientCertificateExpiry: nil})}, {port: 80, mutualAuth: &(elbv2.MutualAuthenticationAttributes{Mode: "passthrough", TrustStoreArn: nil, IgnoreClientCertificateExpiry: nil})}},
 		},
 	}
 	for _, tt := range tests {
