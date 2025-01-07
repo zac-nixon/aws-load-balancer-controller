@@ -4,6 +4,7 @@ import (
 	"context"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	"testing"
 	"time"
 
@@ -25,6 +26,15 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+type resourceVisitor struct {
+	resources []core.Resource
+}
+
+func (r *resourceVisitor) Visit(res core.Resource) error {
+	r.resources = append(r.resources, res)
+	return nil
+}
 
 func Test_defaultModelBuilderTask_Build(t *testing.T) {
 	type resolveViaDiscoveryCall struct {
