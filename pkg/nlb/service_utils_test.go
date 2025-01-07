@@ -1,4 +1,4 @@
-package service
+package nlb
 
 import (
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"

@@ -1,4 +1,4 @@
-package service
+package nlb
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -25,8 +25,6 @@ func NewServiceUtils(annotationsParser annotations.Parser, serviceFinalizer stri
 		featureGates:      featureGates,
 	}
 }
-
-var _ ServiceUtils = (*defaultServiceUtils)(nil)
 
 type defaultServiceUtils struct {
 	annotationParser  annotations.Parser

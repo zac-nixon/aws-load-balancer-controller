@@ -2,14 +2,13 @@ package eventhandlers
 
 import (
 	"context"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
-	svcpkg "sigs.k8s.io/aws-load-balancer-controller/pkg/service"
+	nlbpkg "sigs.k8s.io/aws-load-balancer-controller/pkg/nlb"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -17,7 +16,7 @@ import (
 
 // NewEnqueueRequestForServiceEvent constructs new enqueueRequestsForServiceEvent.
 func NewEnqueueRequestForServiceEvent(eventRecorder record.EventRecorder,
-	serviceUtils svcpkg.ServiceUtils, logger logr.Logger) *enqueueRequestsForServiceEvent {
+	serviceUtils nlbpkg.ServiceUtils, logger logr.Logger) *enqueueRequestsForServiceEvent {
 	return &enqueueRequestsForServiceEvent{
 		eventRecorder: eventRecorder,
 		serviceUtils:  serviceUtils,
@@ -29,7 +28,7 @@ var _ handler.EventHandler = (*enqueueRequestsForServiceEvent)(nil)
 
 type enqueueRequestsForServiceEvent struct {
 	eventRecorder record.EventRecorder
-	serviceUtils  svcpkg.ServiceUtils
+	serviceUtils  nlbpkg.ServiceUtils
 	logger        logr.Logger
 }
 
