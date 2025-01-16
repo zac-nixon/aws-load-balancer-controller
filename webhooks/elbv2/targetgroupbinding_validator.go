@@ -162,6 +162,7 @@ func (v *targetGroupBindingValidator) checkExistingTargetGroups(tgb *elbv2api.Ta
 	if err := v.k8sClient.List(ctx, &tgbList); err != nil {
 		return errors.Wrap(err, "failed to list TargetGroupBindings in the cluster")
 	}
+
 	for _, tgbObj := range tgbList.Items {
 		if tgbObj.Spec.TargetGroupARN == tgb.Spec.TargetGroupARN {
 			return errors.Errorf("TargetGroup %v is already bound to TargetGroupBinding %v", tgb.Spec.TargetGroupARN, k8s.NamespacedName(&tgbObj).String())

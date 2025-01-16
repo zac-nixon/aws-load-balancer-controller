@@ -114,6 +114,7 @@ type groupReconciler struct {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=foobars,verbs=create;patch
 
 func (r *groupReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	return runtime.HandleReconcileError(r.reconcile(ctx, req), r.logger)

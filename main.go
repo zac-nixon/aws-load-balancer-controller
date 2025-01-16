@@ -19,6 +19,8 @@ package main
 import (
 	"k8s.io/client-go/util/workqueue"
 	"os"
+	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway_class"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 
@@ -64,6 +66,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = elbv2api.AddToScheme(scheme)
+	_ = gwv1.Install(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -136,6 +139,8 @@ func main() {
 		finalizerManager, sgManager, sgReconciler, subnetResolver, vpcInfoProvider, elbv2TaggingManager,
 		controllerCFG, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("service"))
 
+	nlbGatewayClassReconciler := gateway_class.NewNLBGatewayClassReconciler(mgr.GetClient(), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, ctrl.Log.WithName("controllers").WithName("nlbgateway"))
+
 	delayingQueue := workqueue.NewDelayingQueueWithConfig(workqueue.DelayingQueueConfig{
 		Name: "delayed-target-group-binding",
 	})
@@ -145,21 +150,30 @@ func main() {
 		finalizerManager, tgbResManager, controllerCFG, deferredTGBQueue, ctrl.Log.WithName("controllers").WithName("targetGroupBinding"))
 
 	ctx := ctrl.SetupSignalHandler()
-	if err = ingGroupReconciler.SetupWithManager(ctx, mgr, clientSet); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Ingress")
-		os.Exit(1)
-	}
 
-	// Setup service reconciler only if AllowServiceType is set to true.
-	if controllerCFG.FeatureGates.Enabled(config.EnableServiceController) {
-		if err = svcReconciler.SetupWithManager(ctx, mgr); err != nil {
-			setupLog.Error(err, "Unable to create controller", "controller", "Service")
+	if controllerCFG.NLBGatewayConfig.MaxConcurrentReconciles == 1000 {
+		if err = ingGroupReconciler.SetupWithManager(ctx, mgr, clientSet); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Ingress")
+			os.Exit(1)
+		}
+		// Setup service reconciler only if AllowServiceType is set to true.
+		if controllerCFG.FeatureGates.Enabled(config.EnableServiceController) {
+			if err = svcReconciler.SetupWithManager(ctx, mgr); err != nil {
+				setupLog.Error(err, "Unable to create controller", "controller", "Service")
+				os.Exit(1)
+			}
+		}
+
+		if err := tgbReconciler.SetupWithManager(ctx, mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "TargetGroupBinding")
 			os.Exit(1)
 		}
 	}
 
-	if err := tgbReconciler.SetupWithManager(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "TargetGroupBinding")
+	// TODO: gate this
+	err = nlbGatewayClassReconciler.SetupWithManager(ctx, mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NLB Gateway Class")
 		os.Exit(1)
 	}
 

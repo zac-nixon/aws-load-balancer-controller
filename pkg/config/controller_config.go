@@ -69,6 +69,9 @@ type ControllerConfig struct {
 	// Configurations for the Service controller
 	ServiceConfig ServiceConfig
 
+	// Configuration for the NLB Gateway controller
+	NLBGatewayConfig NLBGatewayConfig
+
 	// Default AWS Tags that will be applied to all AWS resources managed by this controller.
 	DefaultTags map[string]string
 
@@ -155,6 +158,10 @@ func (cfg *ControllerConfig) BindFlags(fs *pflag.FlagSet) {
 	cfg.IngressConfig.BindFlags(fs)
 	cfg.AddonsConfig.BindFlags(fs)
 	cfg.ServiceConfig.BindFlags(fs)
+
+	// TODO - fix
+	cfg.NLBGatewayConfig.MaxConcurrentReconciles = 3
+	cfg.NLBGatewayConfig.ControllerName = "gateway.k8s.aws/nlb"
 }
 
 // Validate the controller configuration

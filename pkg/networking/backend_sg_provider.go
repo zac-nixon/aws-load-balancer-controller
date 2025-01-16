@@ -45,8 +45,9 @@ const (
 type ResourceType string
 
 const (
-	ResourceTypeIngress = "ingress"
-	ResourceTypeService = "service"
+	ResourceTypeIngress    = "ingress"
+	ResourceTypeService    = "service"
+	ResourceTypeNLBGateway = "nlb-gateway"
 )
 
 // BackendSGProvider is responsible for providing backend security groups
