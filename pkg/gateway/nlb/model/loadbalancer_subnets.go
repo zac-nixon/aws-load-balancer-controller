@@ -11,7 +11,7 @@ import (
 
 func (t *defaultModelBuildTask) buildLoadBalancerSubnets(ctx context.Context, scheme elbv2model.LoadBalancerScheme) ([]ec2types.Subnet, error) {
 	if t.combinedConfiguration.LoadBalancerSubnets != nil {
-		return t.subnetsResolver.ResolveViaNameOrIDSlice(ctx, *t.combinedConfiguration.LoadBalancerSubnets,
+		return t.subnetsResolver.ResolveViaNameOrIDSlice(ctx, t.convertLBSubnetsToStringList(),
 			networking.WithSubnetsResolveLBType(elbv2model.LoadBalancerTypeNetwork),
 			networking.WithSubnetsResolveLBScheme(scheme),
 		)
@@ -63,4 +63,17 @@ func (t *defaultModelBuildTask) buildLoadBalancerSubnets(ctx context.Context, sc
 		networking.WithSubnetsResolveAvailableIPAddressCount(8), // TODO
 		networking.WithSubnetsClusterTagCheck(t.featureGates.Enabled(config.SubnetsClusterTagCheck)),
 	)
+}
+
+func (t *defaultModelBuildTask) convertLBSubnetsToStringList() []string {
+	ss := make([]string, 0)
+
+	if t.combinedConfiguration.LoadBalancerSubnets == nil {
+		return ss
+	}
+
+	for _, subnetConfig := range *t.combinedConfiguration.LoadBalancerSubnets {
+		ss = append(ss, subnetConfig.Identifier)
+	}
+	return ss
 }

@@ -35,9 +35,20 @@ type LBScheme elbv2.LoadBalancerScheme
 // * with `dualstack`, the NLB is accesible via IPv4 and IPv6.
 type LBIPType string
 
+// +kubebuilder:validation:Enum=HTTP1Only;HTTP2Only;HTTP2Optional;HTTP2Preferred;None
+// ALPNPolicy defines the ALPN policy for the LB
+//
+// HTTP1Only Negotiate only HTTP/1.*. The ALPN preference list is http/1.1, http/1.0.
+// HTTP2Only Negotiate only HTTP/2. The ALPN preference list is h2.
+// HTTP2Optional Prefer HTTP/1.* over HTTP/2 (which can be useful for HTTP/2 testing). The ALPN preference list is http/1.1, http/1.0, h2.
+// HTTP2Preferred Prefer HTTP/2 over HTTP/1.*. The ALPN preference list is h2, http/1.1, http/1.0.
+// None Do not negotiate ALPN. This is the default.
+
+type ALPNPolicy elbv2.ALPNPolicy
+
 // AccessLogConfiguration defines the access log settings for a Load Balancer.
 type AccessLogConfiguration struct {
-	// enabled rather or not that access logs should be turned sent.
+	// accessLogsEnabled whether or not that access logs should be turned sent.
 	// +optional
 	AccessLogsEnabled bool `json:"accessLogsEnabled,omitempty"`
 
@@ -50,8 +61,42 @@ type AccessLogConfiguration struct {
 	Prefix *string `json:"prefix,omitempty"`
 }
 
+// SubnetConfiguration defines the subnet settings for a Load Balancer.
+type SubnetConfiguration struct {
+	// identifier name or id for the subnet
+	Identifier string `json:"identifier"`
+
+	// eipAllocation the EIP name for this subnet.
+	// +optional
+	EIPAllocation *string `json:"eipAllocation,omitempty"`
+
+	// privateIPv4Allocation the private ipv4 address to assign to this subnet.
+	// +optional
+	PrivateIPv4Allocation *string `json:"privateIPv4Allocation,omitempty"`
+
+	// privateIPv6Allocation the private ipv6 address to assign to this subnet.
+	// +optional
+	PrivateIPv6Allocation *string `json:"privateIPv6Allocation,omitempty"`
+}
+
+// SSLConfiguration defines the SSL configuration for a listener on the Load Balancer.
+type SSLConfiguration struct {
+	// defaultCertificate the cert arn to be used by default.
+	DefaultCertificate string `json:"defaultCertificate"`
+
+	// certificates the list of other certificates to add to the listener.
+	// +optional
+	Certificates []string `json:"certificates,omitempty"`
+}
+
 // NLBGatewayConfigurationSpec defines the desired state of NLBGatewayConfiguration
 type NLBGatewayConfigurationSpec struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=32
+	// loadBalancerName defines the name of the NLB to provision. If unspecified, it will be automatically generated.
+	// +optional
+	LoadBalancerName *string `json:"loadBalancerName,omitempty"`
+
 	// loadBalancerScheme defines the type of NLB to provision. If unspecified, it will be automatically inferred.
 	// +optional
 	LoadBalancerScheme *LBScheme `json:"loadBalancerScheme,omitempty"`
@@ -62,7 +107,7 @@ type NLBGatewayConfigurationSpec struct {
 
 	// loadBalancerSubnets an optional list of subnet ids or names to be used in the NLB
 	// +optional
-	LoadBalancerSubnets *[]string `json:"loadBalancerSubnets,omitempty"`
+	LoadBalancerSubnets *[]SubnetConfiguration `json:"loadBalancerSubnets,omitempty"`
 
 	// loadBalancerSecurityGroups an optional list of security group ids or names to apply to the NLB
 	// +optional
@@ -84,9 +129,21 @@ type NLBGatewayConfigurationSpec struct {
 	// +optional
 	LoadBalancerAttributes map[string]string `json:"loadBalancerAttributes,omitempty"`
 
+	// listenerAttributes an optional map of attributes that maps listeners protocol + port to their attributes
+	// +optional
+	ListenerAttributes map[string]map[string]string `json:"listenerAttributes,omitempty"`
+
 	// extraResourceTags an optional map of additional tags to apply to AWS resources.
 	// +optional
 	ExtraResourceTags map[string]string `json:"extraResourceTags,omitempty"`
+
+	// sslConfiguration an optional map that maps listener port to TLS settings.
+	// +optional
+	SSLConfiguration map[int32]SSLConfiguration `json:"sslConfiguration,omitempty"`
+
+	// alpnPolicy an optional string that allows you to configure ALPN policies on your Load Balancer
+	// +optional
+	ALPNPolicy ALPNPolicy `json:"alpnPolicy,omitempty"`
 
 	// loadBalancerAttributes optional access log configuration for the load balancer.
 	// +optional

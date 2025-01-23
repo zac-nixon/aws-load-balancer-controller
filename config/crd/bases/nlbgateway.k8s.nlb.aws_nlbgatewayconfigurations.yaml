@@ -41,6 +41,48 @@ spec:
             description: NLBGatewayConfigurationSpec defines the desired state of
               NLBGatewayConfiguration
             properties:
+              accessLogConfiguration:
+                description: loadBalancerAttributes optional access log configuration
+                  for the load balancer.
+                properties:
+                  accessLogsEnabled:
+                    description: accessLogsEnabled whether or not that access logs
+                      should be turned sent.
+                    type: boolean
+                  bucketName:
+                    description: bucketName the bucket to send access logs to.
+                    type: string
+                  prefix:
+                    description: prefix is the prefix added to the bucket name.
+                    type: string
+                type: object
+              enableBackendSecurityGroupRules:
+                description: enableBackendSecurityGroupRules an optional boolean flag
+                  that controls whether the controller should automatically add the
+                  ingress rules to the instance/ENI security group.
+                type: boolean
+              enableCrossZoneLoadBalancing:
+                description: crossZoneLoadBalancingEnabled optional boolean that toggles
+                  routing across availability zones.
+                type: boolean
+              extraResourceTags:
+                additionalProperties:
+                  type: string
+                description: extraResourceTags an optional map of additional tags
+                  to apply to AWS resources.
+                type: object
+              loadBalancerAttributes:
+                additionalProperties:
+                  type: string
+                description: loadBalancerAttributes an optional map of attributes
+                  to apply to the load balancer.
+                type: object
+              loadBalancerName:
+                description: loadBalancerName defines the name of the NLB to provision.
+                  If unspecified, it will be automatically generated.
+                maxLength: 32
+                minLength: 1
+                type: string
               loadBalancerScheme:
                 description: loadBalancerScheme defines the type of NLB to provision.
                   If unspecified, it will be automatically inferred.
@@ -48,12 +90,56 @@ spec:
                 - internal
                 - internet-facing
                 type: string
+              loadBalancerSecurityGroupPrefixes:
+                description: loadBalancerSecurityGroupPrefixes an optional list of
+                  prefixes that are allowed to access the NLB.
+                items:
+                  type: string
+                type: array
+              loadBalancerSecurityGroups:
+                description: loadBalancerSecurityGroups an optional list of security
+                  group ids or names to apply to the NLB
+                items:
+                  type: string
+                type: array
+              loadBalancerSourceRanges:
+                description: loadBalancerSourceRanges an optional list of CIDRs that
+                  are allowed to access the NLB.
+                items:
+                  type: string
+                type: array
               loadBalancerSubnets:
                 description: loadBalancerSubnets an optional list of subnet ids or
                   names to be used in the NLB
                 items:
-                  type: string
+                  description: SubnetConfiguration defines the subnet settings for
+                    a Load Balancer.
+                  properties:
+                    eipAllocation:
+                      description: eipAllocation the EIP name for this subnet.
+                      type: string
+                    identifier:
+                      description: identifier name or id for the subnet
+                      type: string
+                    privateIPv4Allocation:
+                      description: privateIPv4Allocation the private ipv4 address
+                        to assign to this subnet.
+                      type: string
+                    privateIPv6Allocation:
+                      description: privateIPv6Allocation the private ipv6 address
+                        to assign to this subnet.
+                      type: string
+                  required:
+                  - identifier
+                  type: object
                 type: array
+              loadBalancerType:
+                description: loadBalancerIPType defines what kind of load balancer
+                  to provision (ipv4, dual stack)
+                enum:
+                - ipv4
+                - dualstack
+                type: string
             type: object
           status:
             description: NLBGatewayConfigurationStatus defines the observed state

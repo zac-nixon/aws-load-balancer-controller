@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway/eventhandlers"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/common"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/nlb"
 	nlbgatewaymodel "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/nlb/model"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
@@ -103,12 +104,12 @@ func (r *nlbGatewayClassReconciler) reconcileHelper(ctx context.Context, req rec
 		return nil
 	}
 
-	udpRoutes, err := nlb.ListUDPRoutes(ctx, r.k8sClient)
+	udpRoutes, err := common.ListUDPRoutes(ctx, r.k8sClient)
 	if err != nil {
 		return err
 	}
 
-	tcpRoutes, err := nlb.ListTCPRoutes(ctx, r.k8sClient)
+	tcpRoutes, err := common.ListTCPRoutes(ctx, r.k8sClient)
 
 	if err != nil {
 		return err
@@ -122,7 +123,24 @@ func (r *nlbGatewayClassReconciler) reconcileHelper(ctx context.Context, req rec
 
 	relevantUDPRoutes, relevantTCPRoutes := r.filterToRelevantRoutes(gw, udpRoutes, tcpRoutes)
 
-	stack, lb, backendSGRequired, err := r.buildModel(ctx, gw, gwClass, relevantUDPRoutes, relevantTCPRoutes, gatewayConfig)
+	convertedTCPRoutes, err := common.ConvertKubeTCPRoutes(ctx, r.k8sClient, relevantTCPRoutes)
+
+	if err != nil {
+		return err
+	}
+
+	convertedUDPRoutes, err := common.ConvertKubeUDPRoutes(ctx, r.k8sClient, relevantUDPRoutes)
+
+	if err != nil {
+		return err
+	}
+
+	allRoutes := make([]common.ControllerRoute, 0, len(convertedUDPRoutes)+len(convertedTCPRoutes))
+
+	allRoutes = append(allRoutes, convertedTCPRoutes...)
+	allRoutes = append(allRoutes, convertedUDPRoutes...)
+
+	stack, lb, backendSGRequired, err := r.buildModel(ctx, gw, gwClass, allRoutes, gatewayConfig)
 
 	if err != nil {
 		return err
@@ -197,8 +215,8 @@ func (r *nlbGatewayClassReconciler) deployModel(ctx context.Context, gw *gwv1.Ga
 	return nil
 }
 
-func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute, gatewayConfig *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
-	stack, lb, backendSGRequired, err := r.modelBuilder.Build(ctx, gw, gwClass, udpRoutes, tcpRoutes, gatewayConfig)
+func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, gatewayConfig *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
+	stack, lb, backendSGRequired, err := r.modelBuilder.Build(ctx, gw, gwClass, routes, gatewayConfig)
 	if err != nil {
 		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
 		return nil, nil, false, err

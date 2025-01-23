@@ -4,8 +4,8 @@ import (
 	"context"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/common"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -35,7 +35,7 @@ const (
 // ModelBuilder builds the model stack for the service resource.
 type ModelBuilder interface {
 	// Build model stack for an NLB gateway
-	Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error)
+	Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error)
 }
 
 // NewDefaultModelBuilder construct a new defaultModelBuilder
@@ -93,7 +93,7 @@ type defaultModelBuilder struct {
 	logger                    logr.Logger
 }
 
-func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
+func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack := core.NewDefaultStack(core.StackID(k8s.NamespacedName(gw)))
 	task := &defaultModelBuildTask{
 		clusterName:              b.clusterName,
@@ -116,8 +116,7 @@ func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwCla
 
 		gw:                    gw,
 		gwClass:               gwClass,
-		udpRoutes:             udpRoutes,
-		tcpRoutes:             tcpRoutes,
+		routes:                routes,
 		combinedConfiguration: combinedConfiguration,
 
 		defaultTags:                          b.defaultTags,
@@ -182,8 +181,7 @@ type defaultModelBuildTask struct {
 
 	gw                    *gwv1.Gateway
 	gwClass               *gwv1.GatewayClass
-	udpRoutes             []gwalpha2.UDPRoute
-	tcpRoutes             []gwalpha2.TCPRoute
+	routes                []common.ControllerRoute
 	combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec
 
 	fetchExistingLoadBalancerOnce sync.Once
@@ -239,13 +237,10 @@ func (t *defaultModelBuildTask) buildModel(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	/*
-		err = t.buildListeners(ctx, scheme)
-		if err != nil {
-			return err
-		}
-
-	*/
+	err = t.buildListeners(ctx, scheme)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

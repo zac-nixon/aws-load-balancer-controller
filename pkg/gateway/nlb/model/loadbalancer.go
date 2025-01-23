@@ -9,6 +9,7 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"net/netip"
 	"regexp"
 	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
@@ -73,22 +74,27 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, schem
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	tags, err := t.buildLoadBalancerTags(ctx)
+	tags, err := t.buildAdditionalResourceTags()
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	subnetMappings, err := t.buildLoadBalancerSubnetMappings(ctx, ipAddressType, scheme, t.ec2Subnets, enablePrefixForIpv6SourceNat)
+	subnetMappings, err := t.buildLoadBalancerSubnetMappings(ipAddressType, scheme, t.ec2Subnets, enablePrefixForIpv6SourceNat)
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	name, err := t.buildLoadBalancerName(ctx, scheme)
+
+	name, err := t.buildLoadBalancerName(scheme)
 	if err != nil {
 		return elbv2model.LoadBalancerSpec{}, err
 	}
-	securityGroupsInboundRulesOnPrivateLink, err := t.buildSecurityGroupsInboundRulesOnPrivateLink(ctx)
-	if err != nil {
-		return elbv2model.LoadBalancerSpec{}, err
-	}
+	// TODO -- Add this.
+	/*
+		securityGroupsInboundRulesOnPrivateLink, err := t.buildSecurityGroupsInboundRulesOnPrivateLink(ctx)
+		if err != nil {
+			return elbv2model.LoadBalancerSpec{}, err
+		}
+
+	*/
 
 	spec := elbv2model.LoadBalancerSpec{
 		Name:                         name,
@@ -103,9 +109,10 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, schem
 		Tags:                         tags,
 	}
 
-	if securityGroupsInboundRulesOnPrivateLink != nil {
-		spec.SecurityGroupsInboundRulesOnPrivateLink = securityGroupsInboundRulesOnPrivateLink
-	}
+	// TODO Add this back.
+	//if securityGroupsInboundRulesOnPrivateLink != nil {
+	//	spec.SecurityGroupsInboundRulesOnPrivateLink = securityGroupsInboundRulesOnPrivateLink
+	//}
 
 	return spec, nil
 }
@@ -220,11 +227,11 @@ func (t *defaultModelBuildTask) buildLoadBalancerSecurityGroups(ctx context.Cont
 			lbSGTokens = append(lbSGTokens, t.backendSGIDToken)
 		}
 	} else {
-		manageBackendSGRules, err := t.buildManageSecurityGroupRulesFlag(ctx)
+		manageBackendSGRules, err := t.buildManageSecurityGroupRulesFlag()
 		if err != nil {
 			return nil, err
 		}
-		frontendSGIDs, err := t.sgResolver.ResolveViaNameOrID(ctx, sgNameOrIDs)
+		frontendSGIDs, err := t.sgResolver.ResolveViaNameOrID(ctx, *sgNameOrIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -257,8 +264,8 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroup(ctx context.Context, i
 }
 
 func (t *defaultModelBuildTask) buildManagedSecurityGroupSpec(ctx context.Context, ipAddressType elbv2model.IPAddressType) (ec2model.SecurityGroupSpec, error) {
-	name := t.buildManagedSecurityGroupName(ctx)
-	tags, err := t.buildManagedSecurityGroupTags(ctx)
+	name := t.buildManagedSecurityGroupName()
+	tags, err := t.buildManagedSecurityGroupTags()
 	if err != nil {
 		return ec2model.SecurityGroupSpec{}, err
 	}
@@ -282,47 +289,47 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupIngressPermissions(ctx 
 		return nil, err
 	}
 
-	t.tcpRoutes[0].Spec.ParentRefs
-
-	for _, port := range t.service.Spec.Ports {
-		listenPort := int32(port.Port)
-		for _, cidr := range cidrs {
-			if !strings.Contains(cidr, ":") {
-				permissions = append(permissions, ec2model.IPPermission{
-					IPProtocol: strings.ToLower(string(port.Protocol)),
-					FromPort:   awssdk.Int32(listenPort),
-					ToPort:     awssdk.Int32(listenPort),
-					IPRanges: []ec2model.IPRange{
-						{
-							CIDRIP: cidr,
+	// TODO -- Permission de-duplication
+	for _, route := range t.routes {
+		for _, svcRef := range route.GetServiceRefs() {
+			for _, cidr := range cidrs {
+				if !strings.Contains(cidr, ":") {
+					permissions = append(permissions, ec2model.IPPermission{
+						IPProtocol: strings.ToLower(string(route.GetProtocol())),
+						FromPort:   awssdk.Int32(svcRef.Port),
+						ToPort:     awssdk.Int32(svcRef.Port),
+						IPRanges: []ec2model.IPRange{
+							{
+								CIDRIP: cidr,
+							},
 						},
-					},
-				})
-			} else {
-				permissions = append(permissions, ec2model.IPPermission{
-					IPProtocol: strings.ToLower(string(port.Protocol)),
-					FromPort:   awssdk.Int32(listenPort),
-					ToPort:     awssdk.Int32(listenPort),
-					IPv6Range: []ec2model.IPv6Range{
-						{
-							CIDRIPv6: cidr,
+					})
+				} else {
+					permissions = append(permissions, ec2model.IPPermission{
+						IPProtocol: strings.ToLower(string(route.GetProtocol())),
+						FromPort:   awssdk.Int32(svcRef.Port),
+						ToPort:     awssdk.Int32(svcRef.Port),
+						IPv6Range: []ec2model.IPv6Range{
+							{
+								CIDRIPv6: cidr,
+							},
 						},
-					},
-				})
+					})
+				}
 			}
-		}
-		if prefixListsConfigured {
-			for _, prefixID := range prefixListIDs {
-				permissions = append(permissions, ec2model.IPPermission{
-					IPProtocol: strings.ToLower(string(port.Protocol)),
-					FromPort:   awssdk.Int32(listenPort),
-					ToPort:     awssdk.Int32(listenPort),
-					PrefixLists: []ec2model.PrefixList{
-						{
-							ListID: prefixID,
+			if prefixListsConfigured {
+				for _, prefixID := range *t.combinedConfiguration.LoadBalancerSecurityGroupPrefixes {
+					permissions = append(permissions, ec2model.IPPermission{
+						IPProtocol: strings.ToLower(string(route.GetProtocol())),
+						FromPort:   awssdk.Int32(svcRef.Port),
+						ToPort:     awssdk.Int32(svcRef.Port),
+						PrefixLists: []ec2model.PrefixList{
+							{
+								ListID: prefixID,
+							},
 						},
-					},
-				})
+					})
+				}
 			}
 		}
 	}
@@ -344,10 +351,7 @@ func (t *defaultModelBuildTask) buildCIDRsFromSourceRanges(_ context.Context, ip
 			return nil, errors.Errorf("unsupported v6 cidr %v when lb is not dualstack", cidr)
 		}
 	}
-	if len(cidrs) == 0 {
-		if prefixListsConfigured {
-			return cidrs, nil
-		}
+	if len(cidrs) == 0 && !prefixListsConfigured {
 		cidrs = append(cidrs, "0.0.0.0/0")
 		if ipAddressType == elbv2model.IPAddressTypeDualStack {
 			cidrs = append(cidrs, "::/0")
@@ -358,7 +362,7 @@ func (t *defaultModelBuildTask) buildCIDRsFromSourceRanges(_ context.Context, ip
 
 var invalidSecurityGroupNamePtn, _ = regexp.Compile("[[:^alnum:]]")
 
-func (t *defaultModelBuildTask) buildManagedSecurityGroupName(_ context.Context) string {
+func (t *defaultModelBuildTask) buildManagedSecurityGroupName() string {
 	uuidHash := sha256.New()
 	_, _ = uuidHash.Write([]byte(t.clusterName))
 	_, _ = uuidHash.Write([]byte(t.gw.Name))
@@ -371,15 +375,15 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupName(_ context.Context)
 	return fmt.Sprintf("k8s-%.8s-%.8s-%.10s", sanitizedNamespace, sanitizedName, uuid)
 }
 
-func (t *defaultModelBuildTask) buildManagedSecurityGroupTags(ctx context.Context) (map[string]string, error) {
-	sgTags, err := t.buildAdditionalResourceTags(ctx)
+func (t *defaultModelBuildTask) buildManagedSecurityGroupTags() (map[string]string, error) {
+	sgTags, err := t.buildAdditionalResourceTags()
 	if err != nil {
 		return nil, err
 	}
 	return algorithm.MergeStringMap(t.defaultTags, sgTags), nil
 }
 
-func (t *defaultModelBuildTask) buildAdditionalResourceTags(_ context.Context) (map[string]string, error) {
+func (t *defaultModelBuildTask) buildAdditionalResourceTags() (map[string]string, error) {
 	annotationTags := t.combinedConfiguration.ExtraResourceTags
 	for tagKey := range annotationTags {
 		if t.externalManagedTags.Has(tagKey) {
@@ -401,6 +405,119 @@ func (t *defaultModelBuildTask) buildManageSecurityGroupRulesFlag() (bool, error
 	return *t.combinedConfiguration.EnableBackendSecurityGroupRules, nil
 }
 
+func (t *defaultModelBuildTask) buildLoadBalancerSubnetMappings(ipAddressType elbv2model.IPAddressType, scheme elbv2model.LoadBalancerScheme, ec2Subnets []ec2types.Subnet, enablePrefixForIpv6SourceNat elbv2model.EnablePrefixForIpv6SourceNat) ([]elbv2model.SubnetMapping, error) {
+	var eipAllocation []string
+	eipConfigured, err := t.validateEIPAllocations()
+	if err != nil {
+		return nil, err
+	}
+	if eipConfigured {
+		if scheme != elbv2model.LoadBalancerSchemeInternetFacing {
+			return nil, errors.Errorf("EIP allocations can only be set for internet facing load balancers")
+		}
+	}
+
+	var ipv4Addresses []netip.Addr
+	rawIPv4Addresses, err := t.validateIPv4Allocations()
+
+	if err != nil {
+		return nil, errors.Errorf("IPv4 Allocations failed validation")
+	}
+
+	if len(rawIPv4Addresses) > 0 {
+		if scheme != elbv2model.LoadBalancerSchemeInternal {
+			return nil, errors.Errorf("private IPv4 addresses can only be set for internal load balancers")
+		}
+		for _, rawIPv4Address := range rawIPv4Addresses {
+			ipv4Address, err := netip.ParseAddr(rawIPv4Address)
+			if err != nil {
+				return nil, errors.Errorf("private IPv4 addresses must be valid IP address: %v", rawIPv4Address)
+			}
+			if !ipv4Address.Is4() {
+				return nil, errors.Errorf("private IPv4 addresses must be valid IPv4 address: %v", rawIPv4Address)
+			}
+			ipv4Addresses = append(ipv4Addresses, ipv4Address)
+		}
+	}
+
+	var ipv6Addresses []netip.Addr
+
+	rawIPv6Addresses, err := t.validateIPv6Allocations()
+
+	if err != nil {
+		return nil, errors.Errorf("IPv6 Allocations failed validation")
+	}
+
+	if len(rawIPv6Addresses) > 0 {
+		if ipAddressType != elbv2model.IPAddressTypeDualStack {
+			return nil, errors.Errorf("IPv6 addresses can only be set for dualstack load balancers")
+		}
+		for _, rawIPv6Address := range rawIPv6Addresses {
+			ipv6Address, err := netip.ParseAddr(rawIPv6Address)
+			if err != nil {
+				return nil, errors.Errorf("IPv6 addresses must be valid IP address: %v", rawIPv6Address)
+			}
+			if !ipv6Address.Is6() {
+				return nil, errors.Errorf("IPv6 addresses must be valid IPv6 address: %v", rawIPv6Address)
+			}
+			ipv6Addresses = append(ipv6Addresses, ipv6Address)
+		}
+	}
+
+	// TODO -- Add this.
+	/*
+		var isPrefixForIpv6SourceNatEnabled = enablePrefixForIpv6SourceNat == elbv2model.EnablePrefixForIpv6SourceNatOn
+
+		var sourceNatIpv6Prefixes []string
+		sourceNatIpv6PrefixesConfigured := t.annotationParser.ParseStringSliceAnnotation(annotations.ScvLBSuffixSourceNatIpv6Prefixes, &sourceNatIpv6Prefixes, t.service.Annotations)
+		if sourceNatIpv6PrefixesConfigured {
+			sourceNatIpv6PrefixesError := networking.ValidateSourceNatPrefixes(sourceNatIpv6Prefixes, ipAddressType, isPrefixForIpv6SourceNatEnabled, ec2Subnets)
+			if sourceNatIpv6PrefixesError != nil {
+				return nil, sourceNatIpv6PrefixesError
+			}
+		}
+	*/
+
+	subnetMappings := make([]elbv2model.SubnetMapping, 0, len(ec2Subnets))
+	for idx, subnet := range ec2Subnets {
+		mapping := elbv2model.SubnetMapping{
+			SubnetID: awssdk.ToString(subnet.SubnetId),
+		}
+		if eipConfigured {
+			mapping.AllocationID = awssdk.String(eipAllocation[idx])
+		}
+		if len(ipv4Addresses) > 0 {
+			subnetIPv4CIDRs, err := networking.GetSubnetAssociatedIPv4CIDRs(subnet)
+			if err != nil {
+				return nil, err
+			}
+			ipv4AddressesWithinSubnet := networking.FilterIPsWithinCIDRs(ipv4Addresses, subnetIPv4CIDRs)
+			if len(ipv4AddressesWithinSubnet) != 1 {
+				return nil, errors.Errorf("expect one private IPv4 address configured for subnet: %v", awssdk.ToString(subnet.SubnetId))
+			}
+			mapping.PrivateIPv4Address = awssdk.String(ipv4AddressesWithinSubnet[0].String())
+		}
+
+		//if isPrefixForIpv6SourceNatEnabled && sourceNatIpv6PrefixesConfigured {
+		//	mapping.SourceNatIpv6Prefix = awssdk.String(sourceNatIpv6Prefixes[idx])
+		//}
+
+		if len(ipv6Addresses) > 0 {
+			subnetIPv6CIDRs, err := networking.GetSubnetAssociatedIPv6CIDRs(subnet)
+			if err != nil {
+				return nil, err
+			}
+			ipv6AddressesWithinSubnet := networking.FilterIPsWithinCIDRs(ipv6Addresses, subnetIPv6CIDRs)
+			if len(ipv6AddressesWithinSubnet) != 1 {
+				return nil, errors.Errorf("expect one IPv6 address configured for subnet: %v", awssdk.ToString(subnet.SubnetId))
+			}
+			mapping.IPv6Address = awssdk.String(ipv6AddressesWithinSubnet[0].String())
+		}
+		subnetMappings = append(subnetMappings, mapping)
+	}
+	return subnetMappings, nil
+}
+
 // TODO -- this is copy pasta.
 func makeAttributesSliceFromMap(loadBalancerAttributesMap map[string]string) []elbv2model.LoadBalancerAttribute {
 	attributes := make([]elbv2model.LoadBalancerAttribute, 0, len(loadBalancerAttributesMap))
@@ -414,4 +531,83 @@ func makeAttributesSliceFromMap(loadBalancerAttributesMap map[string]string) []e
 		return attributes[i].Key < attributes[j].Key
 	})
 	return attributes
+}
+
+func (t *defaultModelBuildTask) validateEIPAllocations() (bool, error) {
+	if t.combinedConfiguration.LoadBalancerSubnets == nil || len(*t.combinedConfiguration.LoadBalancerSubnets) == 0 {
+		return false, nil
+	}
+
+	eipConfigured := (*t.combinedConfiguration.LoadBalancerSubnets)[0].EIPAllocation != nil
+
+	for _, subnetConfig := range *t.combinedConfiguration.LoadBalancerSubnets {
+		if eipConfigured == (subnetConfig.EIPAllocation != nil) {
+			return false, errors.New("EIP allocation must be specified for all or none of the subnets")
+		}
+	}
+	return eipConfigured, nil
+}
+
+func (t *defaultModelBuildTask) validateIPv4Allocations() ([]string, error) {
+	result := make([]string, 0)
+	if t.combinedConfiguration.LoadBalancerSubnets == nil || len(*t.combinedConfiguration.LoadBalancerSubnets) == 0 {
+		return result, nil
+	}
+
+	privateIPv4Configured := (*t.combinedConfiguration.LoadBalancerSubnets)[0].PrivateIPv4Allocation != nil
+
+	for _, subnetConfig := range *t.combinedConfiguration.LoadBalancerSubnets {
+		if privateIPv4Configured == (subnetConfig.PrivateIPv4Allocation != nil) {
+			return result, errors.New("IPv4 allocation must be specified for all or none of the subnets")
+		}
+
+		if subnetConfig.PrivateIPv4Allocation != nil {
+			result = append(result, *subnetConfig.PrivateIPv4Allocation)
+		}
+	}
+	return result, nil
+}
+
+func (t *defaultModelBuildTask) validateIPv6Allocations() ([]string, error) {
+	result := make([]string, 0)
+	if t.combinedConfiguration.LoadBalancerSubnets == nil || len(*t.combinedConfiguration.LoadBalancerSubnets) == 0 {
+		return result, nil
+	}
+
+	privateIPv4Configured := (*t.combinedConfiguration.LoadBalancerSubnets)[0].PrivateIPv6Allocation != nil
+
+	for _, subnetConfig := range *t.combinedConfiguration.LoadBalancerSubnets {
+		if privateIPv4Configured == (subnetConfig.PrivateIPv6Allocation != nil) {
+			return result, errors.New("IPv6 allocation must be specified for all or none of the subnets")
+		}
+
+		if subnetConfig.PrivateIPv6Allocation != nil {
+			result = append(result, *subnetConfig.PrivateIPv6Allocation)
+		}
+	}
+	return result, nil
+}
+
+// TODO -- This is mostly copy pasta.
+var invalidLoadBalancerNamePattern = regexp.MustCompile("[[:^alnum:]]")
+
+func (t *defaultModelBuildTask) buildLoadBalancerName(scheme elbv2model.LoadBalancerScheme) (string, error) {
+
+	if t.combinedConfiguration.LoadBalancerName != nil {
+		name := *t.combinedConfiguration.LoadBalancerName
+		if len(name) > 32 {
+			return "", errors.New("load balancer name cannot be longer than 32 characters")
+		}
+		return name, nil
+	}
+
+	uuidHash := sha256.New()
+	_, _ = uuidHash.Write([]byte(t.clusterName))
+	_, _ = uuidHash.Write([]byte(t.gw.UID))
+	_, _ = uuidHash.Write([]byte(scheme))
+	uuid := hex.EncodeToString(uuidHash.Sum(nil))
+
+	sanitizedNamespace := invalidLoadBalancerNamePattern.ReplaceAllString(t.gw.Namespace, "")
+	sanitizedName := invalidLoadBalancerNamePattern.ReplaceAllString(t.gw.Name, "")
+	return fmt.Sprintf("k8s-%.8s-%.8s-%.10s", sanitizedNamespace, sanitizedName, uuid), nil
 }
