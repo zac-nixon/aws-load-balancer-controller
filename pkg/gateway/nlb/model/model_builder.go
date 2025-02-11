@@ -3,7 +3,8 @@ package nlbgatewaymodel
 import (
 	"context"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/common"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sync"
@@ -35,7 +36,7 @@ const (
 // ModelBuilder builds the model stack for the service resource.
 type ModelBuilder interface {
 	// Build model stack for an NLB gateway
-	Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error)
+	Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes map[gwv1.Listener][]common.ControllerRoute, combinedConfiguration *elbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error)
 }
 
 // NewDefaultModelBuilder construct a new defaultModelBuilder
@@ -93,7 +94,7 @@ type defaultModelBuilder struct {
 	logger                    logr.Logger
 }
 
-func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
+func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes map[gwv1.Listener][]common.ControllerRoute, combinedConfiguration *elbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack := core.NewDefaultStack(core.StackID(k8s.NamespacedName(gw)))
 	task := &defaultModelBuildTask{
 		clusterName:              b.clusterName,
@@ -131,7 +132,7 @@ func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwCla
 		defaultTargetType:                    b.defaultTargetType,
 		defaultLoadBalancerScheme:            b.defaultLoadBalancerScheme,
 		defaultHealthCheckProtocol:           elbv2model.ProtocolTCP,
-		defaultHealthCheckPort:               healthCheckPortTrafficPort,
+		defaultHealthCheckPort:               intstr.FromString(healthCheckPortTrafficPort),
 		defaultHealthCheckPath:               "/",
 		defaultHealthCheckInterval:           10,
 		defaultHealthCheckTimeout:            10,
@@ -181,8 +182,8 @@ type defaultModelBuildTask struct {
 
 	gw                    *gwv1.Gateway
 	gwClass               *gwv1.GatewayClass
-	routes                []common.ControllerRoute
-	combinedConfiguration *nlbgwv1beta1.NLBGatewayConfigurationSpec
+	routes                map[gwv1.Listener][]common.ControllerRoute
+	combinedConfiguration *elbgwv1beta1.NLBGatewayConfigurationSpec
 
 	fetchExistingLoadBalancerOnce sync.Once
 	existingLoadBalancer          *elbv2deploy.LoadBalancerWithTags
@@ -199,7 +200,7 @@ type defaultModelBuildTask struct {
 	defaultTargetType                    elbv2model.TargetType
 	defaultLoadBalancerScheme            elbv2model.LoadBalancerScheme
 	defaultHealthCheckProtocol           elbv2model.Protocol
-	defaultHealthCheckPort               string
+	defaultHealthCheckPort               intstr.IntOrString
 	defaultHealthCheckPath               string
 	defaultHealthCheckInterval           int32
 	defaultHealthCheckTimeout            int32
@@ -213,6 +214,7 @@ type defaultModelBuildTask struct {
 	// Default health check settings for NLB instance mode with spec.ExternalTrafficPolicy set to Local
 	defaultHealthCheckProtocolForInstanceModeLocal           elbv2model.Protocol
 	defaultHealthCheckPathForInstanceModeLocal               string
+	defaultHealthCheckPortForInstanceModeLocal               int32
 	defaultHealthCheckIntervalForInstanceModeLocal           int32
 	defaultHealthCheckTimeoutForInstanceModeLocal            int32
 	defaultHealthCheckHealthyThresholdForInstanceModeLocal   int32

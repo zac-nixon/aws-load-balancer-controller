@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway/eventhandlers"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy"
@@ -123,22 +123,7 @@ func (r *nlbGatewayClassReconciler) reconcileHelper(ctx context.Context, req rec
 
 	relevantUDPRoutes, relevantTCPRoutes := r.filterToRelevantRoutes(gw, udpRoutes, tcpRoutes)
 
-	convertedTCPRoutes, err := common.ConvertKubeTCPRoutes(ctx, r.k8sClient, relevantTCPRoutes)
-
-	if err != nil {
-		return err
-	}
-
-	convertedUDPRoutes, err := common.ConvertKubeUDPRoutes(ctx, r.k8sClient, relevantUDPRoutes)
-
-	if err != nil {
-		return err
-	}
-
-	allRoutes := make([]common.ControllerRoute, 0, len(convertedUDPRoutes)+len(convertedTCPRoutes))
-
-	allRoutes = append(allRoutes, convertedTCPRoutes...)
-	allRoutes = append(allRoutes, convertedUDPRoutes...)
+	allRoutes, err := r.mapRoutesToGatewayListener(ctx, gw, relevantUDPRoutes, relevantTCPRoutes)
 
 	stack, lb, backendSGRequired, err := r.buildModel(ctx, gw, gwClass, allRoutes, gatewayConfig)
 
@@ -215,7 +200,7 @@ func (r *nlbGatewayClassReconciler) deployModel(ctx context.Context, gw *gwv1.Ga
 	return nil
 }
 
-func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes []common.ControllerRoute, gatewayConfig *nlbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
+func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes map[gwv1.Listener][]common.ControllerRoute, gatewayConfig *elbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack, lb, backendSGRequired, err := r.modelBuilder.Build(ctx, gw, gwClass, routes, gatewayConfig)
 	if err != nil {
 		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
@@ -230,12 +215,106 @@ func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gat
 	return stack, lb, backendSGRequired, nil
 }
 
+// gw (nlb) -> route (listener) -> service (target group)
+// We already know via parent refs that these routes belong to the gateway.
+func (r *nlbGatewayClassReconciler) mapRoutesToGatewayListener(ctx context.Context, gw *gwv1.Gateway, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute) (map[gwv1.Listener][]common.ControllerRoute, error) {
+
+	routeMap := map[gwv1.Listener][]common.ControllerRoute{}
+
+	for _, listener := range gw.Spec.Listeners {
+
+		for _, route := range udpRoutes {
+			if r.doesRouteBelongToListener(&listener, &listener.Port, &listener.Name) {
+				allowed, err := r.doesListenerNamespaceAllowAttachment(&listener, gw.Namespace, route.Namespace)
+				if err != nil {
+					return routeMap, err
+				}
+				if allowed {
+					convertedRoute, err := common.ConvertKubeUDPRoutes(ctx, r.k8sClient, route)
+					if err != nil {
+						return routeMap, err
+					}
+					routeMap[listener] = append(routeMap[listener], convertedRoute)
+				} else {
+					r.logger.Error(errors.Errorf("Route does not allow attachement"), "", "route", route)
+				}
+			}
+		}
+
+		for _, route := range tcpRoutes {
+			if r.doesRouteBelongToListener(&listener, &listener.Port, &listener.Name) {
+				allowed, err := r.doesListenerNamespaceAllowAttachment(&listener, gw.Namespace, route.Namespace)
+				if err != nil {
+					return routeMap, err
+				}
+				if allowed {
+					convertedRoute, err := common.ConvertKubeTCPRoutes(ctx, r.k8sClient, route)
+					if err != nil {
+						return routeMap, err
+					}
+					routeMap[listener] = append(routeMap[listener], convertedRoute)
+				} else {
+					r.logger.Error(errors.Errorf("Route does not allow attachement"), "", "route", route)
+				}
+			}
+		}
+	}
+	return routeMap, nil
+}
+
+func (r *nlbGatewayClassReconciler) doesRouteBelongToListener(listener *gwv1.Listener, port *gwv1.PortNumber, sectionName *gwv1.SectionName) bool {
+	if port != nil && sectionName != nil {
+		return listener.Port == *port && listener.Name == *sectionName
+	}
+
+	if port != nil {
+		return listener.Port == *port
+	}
+
+	if sectionName != nil {
+		return listener.Name == *sectionName
+	}
+
+	return false
+}
+
+func (r *nlbGatewayClassReconciler) doesListenerNamespaceAllowAttachment(listener *gwv1.Listener, gatewayNamespace string, routeNamespace string) (bool, error) {
+	if listener.AllowedRoutes == nil {
+		return false, nil
+	}
+
+	ar := *listener.AllowedRoutes
+	// The default when allowed routes is missing is to allow connection in the same namespace.
+	if ar.Namespaces == nil || *ar.Namespaces.From == gwv1.NamespacesFromSame {
+		return gatewayNamespace == routeNamespace, nil
+	}
+
+	if *ar.Namespaces.From == gwv1.NamespacesFromAll {
+		return true, nil
+	}
+
+	if *ar.Namespaces.From == gwv1.NamespacesFromSelector {
+		if ar.Namespaces.Selector == nil {
+			return false, errors.Errorf("Namespace selector has to be provided for Selector usage.")
+		}
+
+		// TODO -- Add support for this.
+	}
+
+	return false, errors.Errorf(string("Unknown value for " + *ar.Namespaces.From))
+}
+
 // filterToRelevantRoutes filters the route lists to only routes that are currently attached to the Gateway.
 func (r *nlbGatewayClassReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udpRoutes *gwalpha2.UDPRouteList, tcpRoutes *gwalpha2.TCPRouteList) ([]gwalpha2.UDPRoute, []gwalpha2.TCPRoute) {
 
 	relevantTCPRoutes := make([]gwalpha2.TCPRoute, 0)
 	for _, route := range tcpRoutes.Items {
 		for _, parentRef := range route.Spec.ParentRefs {
+
+			// Default for kind is Gateway.
+			if parentRef.Kind != nil && *parentRef.Kind != "Gateway" {
+				continue
+			}
 
 			var namespaceToCompare string
 
@@ -247,6 +326,8 @@ func (r *nlbGatewayClassReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udp
 
 			if string(parentRef.Name) == gw.Name && gw.Namespace == namespaceToCompare {
 				relevantTCPRoutes = append(relevantTCPRoutes, route)
+				// TODO need a break?
+				break
 			}
 		}
 	}
@@ -265,6 +346,8 @@ func (r *nlbGatewayClassReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udp
 
 			if string(parentRef.Name) == gw.Name && gw.Namespace == namespaceToCompare {
 				relevantUDPRoutes = append(relevantUDPRoutes, route)
+				// TODO need a break?
+				break
 			}
 		}
 	}

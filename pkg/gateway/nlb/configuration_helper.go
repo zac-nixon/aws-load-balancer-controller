@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
-	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -12,7 +12,7 @@ import (
 
 // GatewayConfigurationGetter ...
 type GatewayConfigurationGetter interface {
-	GenerateNLBGatewayConfiguration(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass) (*nlbgwv1beta1.NLBGatewayConfigurationSpec, error)
+	GenerateNLBGatewayConfiguration(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass) (*elbgwv1beta1.NLBGatewayConfigurationSpec, error)
 }
 
 type gatewayConfigurationGetter struct {
@@ -21,7 +21,7 @@ type gatewayConfigurationGetter struct {
 
 var _ GatewayConfigurationGetter = &gatewayConfigurationGetter{}
 
-func (getter *gatewayConfigurationGetter) GenerateNLBGatewayConfiguration(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass) (*nlbgwv1beta1.NLBGatewayConfigurationSpec, error) {
+func (getter *gatewayConfigurationGetter) GenerateNLBGatewayConfiguration(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass) (*elbgwv1beta1.NLBGatewayConfigurationSpec, error) {
 	gwConfig, err := getter.retrieveConfigurationObject(ctx, convertLocalParameterReference(gw))
 
 	if err != nil {
@@ -35,16 +35,16 @@ func (getter *gatewayConfigurationGetter) GenerateNLBGatewayConfiguration(ctx co
 	return priorityMerge(gwClassConfig, gwConfig), nil
 }
 
-func (getter *gatewayConfigurationGetter) retrieveConfigurationObject(ctx context.Context, paramReference *gwv1.ParametersReference) (*nlbgwv1beta1.NLBGatewayConfigurationSpec, error) {
+func (getter *gatewayConfigurationGetter) retrieveConfigurationObject(ctx context.Context, paramReference *gwv1.ParametersReference) (*elbgwv1beta1.NLBGatewayConfigurationSpec, error) {
 	if paramReference == nil {
-		return &nlbgwv1beta1.NLBGatewayConfigurationSpec{}, nil
+		return &elbgwv1beta1.NLBGatewayConfigurationSpec{}, nil
 	}
 
 	if paramReference.Kind != "NLBGatewayConfiguration" {
 		return nil, errors.Errorf("expected NLBGatewayConfiguration resource but got %s", paramReference.Kind)
 	}
 
-	config := &nlbgwv1beta1.NLBGatewayConfiguration{}
+	config := &elbgwv1beta1.NLBGatewayConfiguration{}
 
 	namespace := ""
 	if paramReference.Namespace != nil {
@@ -71,8 +71,8 @@ func convertLocalParameterReference(gw *gwv1.Gateway) *gwv1.ParametersReference 
 	}
 }
 
-func priorityMerge(highPriority *nlbgwv1beta1.NLBGatewayConfigurationSpec, lowPriority *nlbgwv1beta1.NLBGatewayConfigurationSpec) *nlbgwv1beta1.NLBGatewayConfigurationSpec {
-	result := &nlbgwv1beta1.NLBGatewayConfigurationSpec{}
+func priorityMerge(highPriority *elbgwv1beta1.NLBGatewayConfigurationSpec, lowPriority *elbgwv1beta1.NLBGatewayConfigurationSpec) *elbgwv1beta1.NLBGatewayConfigurationSpec {
+	result := &elbgwv1beta1.NLBGatewayConfigurationSpec{}
 
 	// TODO -- How to do this merging logic cleanly?
 	if highPriority.LoadBalancerScheme != nil {

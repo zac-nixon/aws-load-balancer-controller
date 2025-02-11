@@ -41,6 +41,10 @@ spec:
             description: NLBGatewayConfigurationSpec defines the desired state of
               NLBGatewayConfiguration
             properties:
+              MultiClusterEnabled:
+                description: multiClusterEnabled optional boolean that toggles multi
+                  cluster capabilities
+                type: boolean
               accessLogConfiguration:
                 description: loadBalancerAttributes optional access log configuration
                   for the load balancer.
@@ -70,6 +74,14 @@ spec:
                   type: string
                 description: extraResourceTags an optional map of additional tags
                   to apply to AWS resources.
+                type: object
+              listenerAttributes:
+                additionalProperties:
+                  additionalProperties:
+                    type: string
+                  type: object
+                description: listenerAttributes an optional map of attributes that
+                  maps listeners protocol + port to their attributes
                 type: object
               loadBalancerAttributes:
                 additionalProperties:
@@ -140,6 +152,42 @@ spec:
                 - ipv4
                 - dualstack
                 type: string
+              sslConfiguration:
+                additionalProperties:
+                  description: SSLConfiguration defines the SSL configuration for
+                    a listener on the Load Balancer.
+                  properties:
+                    alpnPolicy:
+                      description: alpnPolicy an optional string that allows you to
+                        configure ALPN policies on your Load Balancer
+                      enum:
+                      - HTTP1Only
+                      - HTTP2Only
+                      - HTTP2Optional
+                      - HTTP2Preferred
+                      - None
+                      type: string
+                    backendProtocol:
+                      description: backendProtocol the protocol to use...
+                      type: string
+                    certificates:
+                      description: certificates the list of other certificates to
+                        add to the listener.
+                      items:
+                        type: string
+                      type: array
+                    defaultCertificate:
+                      description: defaultCertificate the cert arn to be used by default.
+                      type: string
+                    negotiationPolicy:
+                      description: negotiationPolicy the policy to use...
+                      type: string
+                  required:
+                  - defaultCertificate
+                  type: object
+                description: sslConfiguration an optional map that maps listener port
+                  to TLS settings.
+                type: object
             type: object
           status:
             description: NLBGatewayConfigurationStatus defines the observed state

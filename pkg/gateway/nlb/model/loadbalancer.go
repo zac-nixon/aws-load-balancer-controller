@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"net/netip"
 	"regexp"
-	nlbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/algorithm"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
@@ -123,9 +123,9 @@ func (t *defaultModelBuildTask) buildLoadBalancerIPAddressType(_ context.Context
 	}
 
 	switch *t.combinedConfiguration.LoadBalancerType {
-	case nlbgwv1beta1.LBIPType(elbv2model.IPAddressTypeIPV4):
+	case elbgwv1beta1.LBIPType(elbv2model.IPAddressTypeIPV4):
 		return elbv2model.IPAddressTypeIPV4, nil
-	case nlbgwv1beta1.LBIPType(elbv2model.IPAddressTypeDualStack):
+	case elbgwv1beta1.LBIPType(elbv2model.IPAddressTypeDualStack):
 		return elbv2model.IPAddressTypeDualStack, nil
 	default:
 		return "", errors.Errorf("unknown IPAddressType: %v", *t.combinedConfiguration.LoadBalancerType)
@@ -290,45 +290,47 @@ func (t *defaultModelBuildTask) buildManagedSecurityGroupIngressPermissions(ctx 
 	}
 
 	// TODO -- Permission de-duplication
-	for _, route := range t.routes {
-		for _, svcRef := range route.GetServiceRefs() {
-			for _, cidr := range cidrs {
-				if !strings.Contains(cidr, ":") {
-					permissions = append(permissions, ec2model.IPPermission{
-						IPProtocol: strings.ToLower(string(route.GetProtocol())),
-						FromPort:   awssdk.Int32(svcRef.Port),
-						ToPort:     awssdk.Int32(svcRef.Port),
-						IPRanges: []ec2model.IPRange{
-							{
-								CIDRIP: cidr,
+	for _, routeList := range t.routes {
+		for _, route := range routeList {
+			for _, svcRef := range route.GetServiceRefs() {
+				for _, cidr := range cidrs {
+					if !strings.Contains(cidr, ":") {
+						permissions = append(permissions, ec2model.IPPermission{
+							IPProtocol: strings.ToLower(string(route.GetProtocol())),
+							FromPort:   awssdk.Int32(svcRef.Port.Port),
+							ToPort:     awssdk.Int32(svcRef.Port.Port),
+							IPRanges: []ec2model.IPRange{
+								{
+									CIDRIP: cidr,
+								},
 							},
-						},
-					})
-				} else {
-					permissions = append(permissions, ec2model.IPPermission{
-						IPProtocol: strings.ToLower(string(route.GetProtocol())),
-						FromPort:   awssdk.Int32(svcRef.Port),
-						ToPort:     awssdk.Int32(svcRef.Port),
-						IPv6Range: []ec2model.IPv6Range{
-							{
-								CIDRIPv6: cidr,
+						})
+					} else {
+						permissions = append(permissions, ec2model.IPPermission{
+							IPProtocol: strings.ToLower(string(route.GetProtocol())),
+							FromPort:   awssdk.Int32(svcRef.Port.Port),
+							ToPort:     awssdk.Int32(svcRef.Port.Port),
+							IPv6Range: []ec2model.IPv6Range{
+								{
+									CIDRIPv6: cidr,
+								},
 							},
-						},
-					})
+						})
+					}
 				}
-			}
-			if prefixListsConfigured {
-				for _, prefixID := range *t.combinedConfiguration.LoadBalancerSecurityGroupPrefixes {
-					permissions = append(permissions, ec2model.IPPermission{
-						IPProtocol: strings.ToLower(string(route.GetProtocol())),
-						FromPort:   awssdk.Int32(svcRef.Port),
-						ToPort:     awssdk.Int32(svcRef.Port),
-						PrefixLists: []ec2model.PrefixList{
-							{
-								ListID: prefixID,
+				if prefixListsConfigured {
+					for _, prefixID := range *t.combinedConfiguration.LoadBalancerSecurityGroupPrefixes {
+						permissions = append(permissions, ec2model.IPPermission{
+							IPProtocol: strings.ToLower(string(route.GetProtocol())),
+							FromPort:   awssdk.Int32(svcRef.Port.Port),
+							ToPort:     awssdk.Int32(svcRef.Port.Port),
+							PrefixLists: []ec2model.PrefixList{
+								{
+									ListID: prefixID,
+								},
 							},
-						},
-					})
+						})
+					}
 				}
 			}
 		}

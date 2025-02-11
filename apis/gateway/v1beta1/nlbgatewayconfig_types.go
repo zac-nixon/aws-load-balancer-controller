@@ -87,6 +87,18 @@ type SSLConfiguration struct {
 	// certificates the list of other certificates to add to the listener.
 	// +optional
 	Certificates []string `json:"certificates,omitempty"`
+
+	// negotiationPolicy the policy to use...
+	// +optional
+	NegotiationPolicy *string `json:"negotiationPolicy,omitempty"`
+
+	// backendProtocol the protocol to use...
+	// +optional
+	BackendProtocol string `json:"backendProtocol,omitempty"`
+
+	// alpnPolicy an optional string that allows you to configure ALPN policies on your Load Balancer
+	// +optional
+	ALPNPolicy ALPNPolicy `json:"alpnPolicy,omitempty"`
 }
 
 // NLBGatewayConfigurationSpec defines the desired state of NLBGatewayConfiguration
@@ -139,11 +151,7 @@ type NLBGatewayConfigurationSpec struct {
 
 	// sslConfiguration an optional map that maps listener port to TLS settings.
 	// +optional
-	SSLConfiguration map[int32]SSLConfiguration `json:"sslConfiguration,omitempty"`
-
-	// alpnPolicy an optional string that allows you to configure ALPN policies on your Load Balancer
-	// +optional
-	ALPNPolicy ALPNPolicy `json:"alpnPolicy,omitempty"`
+	SSLConfiguration map[string]SSLConfiguration `json:"sslConfiguration,omitempty"`
 
 	// loadBalancerAttributes optional access log configuration for the load balancer.
 	// +optional
@@ -152,6 +160,10 @@ type NLBGatewayConfigurationSpec struct {
 	// crossZoneLoadBalancingEnabled optional boolean that toggles routing across availability zones.
 	// +optional
 	EnableCrossZoneLoadBalancing *bool `json:"enableCrossZoneLoadBalancing,omitempty"`
+
+	// multiClusterEnabled optional boolean that toggles multi cluster capabilities
+	// +optional
+	MultiClusterEnabled *bool `json:"MultiClusterEnabled,omitempty"`
 }
 
 // TODO -- these can be used to set what generation the gateway is currently on to track progress on reconcile.
