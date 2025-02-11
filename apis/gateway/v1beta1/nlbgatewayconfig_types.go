@@ -103,60 +103,74 @@ type SSLConfiguration struct {
 
 // NLBGatewayConfigurationSpec defines the desired state of NLBGatewayConfiguration
 type NLBGatewayConfigurationSpec struct {
+	// DONE
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=32
 	// loadBalancerName defines the name of the NLB to provision. If unspecified, it will be automatically generated.
 	// +optional
 	LoadBalancerName *string `json:"loadBalancerName,omitempty"`
 
+	// DONE
 	// loadBalancerScheme defines the type of NLB to provision. If unspecified, it will be automatically inferred.
 	// +optional
 	LoadBalancerScheme *LBScheme `json:"loadBalancerScheme,omitempty"`
 
+	// DONE
 	// loadBalancerIPType defines what kind of load balancer to provision (ipv4, dual stack)
 	// +optional
-	LoadBalancerType *LBIPType `json:"loadBalancerType,omitempty"`
+	LoadBalancerIPType *LBIPType `json:"loadBalancerIPType,omitempty"`
 
+	// DONE
 	// loadBalancerSubnets an optional list of subnet ids or names to be used in the NLB
 	// +optional
 	LoadBalancerSubnets *[]SubnetConfiguration `json:"loadBalancerSubnets,omitempty"`
 
+	// DONE
 	// loadBalancerSecurityGroups an optional list of security group ids or names to apply to the NLB
 	// +optional
 	LoadBalancerSecurityGroups *[]string `json:"loadBalancerSecurityGroups,omitempty"`
 
+	// DONE
 	// loadBalancerSecurityGroupPrefixes an optional list of prefixes that are allowed to access the NLB.
 	// +optional
 	LoadBalancerSecurityGroupPrefixes *[]string `json:"loadBalancerSecurityGroupPrefixes,omitempty"`
 
+	// DONE - But this is defined in the TG config as well.
 	// loadBalancerSourceRanges an optional list of CIDRs that are allowed to access the NLB.
 	// +optional
 	LoadBalancerSourceRanges *[]string `json:"loadBalancerSourceRanges,omitempty"`
 
+	// DONE
 	// enableBackendSecurityGroupRules an optional boolean flag that controls whether the controller should automatically add the ingress rules to the instance/ENI security group.
 	// +optional
 	EnableBackendSecurityGroupRules *bool `json:"enableBackendSecurityGroupRules,omitempty"`
 
+	// DONE
 	// loadBalancerAttributes an optional map of attributes to apply to the load balancer.
 	// +optional
 	LoadBalancerAttributes map[string]string `json:"loadBalancerAttributes,omitempty"`
 
+	// DONE
 	// listenerAttributes an optional map of attributes that maps listeners protocol + port to their attributes
 	// +optional
 	ListenerAttributes map[string]map[string]string `json:"listenerAttributes,omitempty"`
 
+	// DONE
 	// extraResourceTags an optional map of additional tags to apply to AWS resources.
 	// +optional
 	ExtraResourceTags map[string]string `json:"extraResourceTags,omitempty"`
 
+	// DONE
 	// sslConfiguration an optional map that maps listener port to TLS settings.
 	// +optional
 	SSLConfiguration map[string]SSLConfiguration `json:"sslConfiguration,omitempty"`
 
+	// DONE
 	// loadBalancerAttributes optional access log configuration for the load balancer.
 	// +optional
 	AccessLogConfiguration *AccessLogConfiguration `json:"accessLogConfiguration,omitempty"`
 
+	// DONE
 	// crossZoneLoadBalancingEnabled optional boolean that toggles routing across availability zones.
 	// +optional
 	EnableCrossZoneLoadBalancing *bool `json:"enableCrossZoneLoadBalancing,omitempty"`

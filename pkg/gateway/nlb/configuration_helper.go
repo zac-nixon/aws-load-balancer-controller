@@ -19,6 +19,12 @@ type gatewayConfigurationGetter struct {
 	client client.Client
 }
 
+func NewGatewayConfigurationGetter(client client.Client) GatewayConfigurationGetter {
+	return &gatewayConfigurationGetter{
+		client: client,
+	}
+}
+
 var _ GatewayConfigurationGetter = &gatewayConfigurationGetter{}
 
 func (getter *gatewayConfigurationGetter) GenerateNLBGatewayConfiguration(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass) (*elbgwv1beta1.NLBGatewayConfigurationSpec, error) {
@@ -59,7 +65,7 @@ func (getter *gatewayConfigurationGetter) retrieveConfigurationObject(ctx contex
 }
 
 func convertLocalParameterReference(gw *gwv1.Gateway) *gwv1.ParametersReference {
-	if gw == nil || gw.Spec.Infrastructure.ParametersRef == nil {
+	if gw == nil || gw.Spec.Infrastructure == nil || gw.Spec.Infrastructure.ParametersRef == nil {
 		return nil
 	}
 
@@ -79,6 +85,12 @@ func priorityMerge(highPriority *elbgwv1beta1.NLBGatewayConfigurationSpec, lowPr
 		result.LoadBalancerScheme = highPriority.LoadBalancerScheme
 	} else if lowPriority.LoadBalancerScheme != nil {
 		result.LoadBalancerScheme = lowPriority.LoadBalancerScheme
+	}
+
+	if highPriority.LoadBalancerName != nil {
+		result.LoadBalancerName = highPriority.LoadBalancerName
+	} else if lowPriority.LoadBalancerName != nil {
+		result.LoadBalancerName = lowPriority.LoadBalancerName
 	}
 
 	if highPriority.LoadBalancerSubnets != nil {
@@ -111,13 +123,31 @@ func priorityMerge(highPriority *elbgwv1beta1.NLBGatewayConfigurationSpec, lowPr
 		result.EnableBackendSecurityGroupRules = lowPriority.EnableBackendSecurityGroupRules
 	}
 
-	if highPriority.LoadBalancerType != nil {
-		result.LoadBalancerType = highPriority.LoadBalancerType
-	} else if lowPriority.LoadBalancerType != nil {
-		result.LoadBalancerType = lowPriority.LoadBalancerType
+	if highPriority.LoadBalancerIPType != nil {
+		result.LoadBalancerIPType = highPriority.LoadBalancerIPType
+	} else if lowPriority.LoadBalancerIPType != nil {
+		result.LoadBalancerIPType = lowPriority.LoadBalancerIPType
 	}
 
 	result.LoadBalancerAttributes = algorithm.MergeStringMap(highPriority.LoadBalancerAttributes, lowPriority.LoadBalancerAttributes)
+
+	for key, la := range highPriority.ListenerAttributes {
+		result.ListenerAttributes[key] = algorithm.MergeStringMap(la, lowPriority.ListenerAttributes[key])
+	}
+
+	for key, la := range lowPriority.ListenerAttributes {
+		if _, ok := highPriority.ListenerAttributes[key]; !ok {
+			result.ListenerAttributes[key] = la
+		}
+	}
+
+	for key, sslConfig := range lowPriority.SSLConfiguration {
+		result.SSLConfiguration[key] = sslConfig
+	}
+
+	for key, sslConfig := range highPriority.SSLConfiguration {
+		result.SSLConfiguration[key] = sslConfig
+	}
 
 	result.ExtraResourceTags = algorithm.MergeStringMap(highPriority.ExtraResourceTags, lowPriority.ExtraResourceTags)
 
@@ -131,6 +161,12 @@ func priorityMerge(highPriority *elbgwv1beta1.NLBGatewayConfigurationSpec, lowPr
 		result.EnableCrossZoneLoadBalancing = highPriority.EnableCrossZoneLoadBalancing
 	} else if lowPriority.EnableCrossZoneLoadBalancing != nil {
 		result.EnableCrossZoneLoadBalancing = lowPriority.EnableCrossZoneLoadBalancing
+	}
+
+	if highPriority.MultiClusterEnabled != nil {
+		result.MultiClusterEnabled = highPriority.MultiClusterEnabled
+	} else if lowPriority.MultiClusterEnabled != nil {
+		result.MultiClusterEnabled = lowPriority.MultiClusterEnabled
 	}
 
 	return result

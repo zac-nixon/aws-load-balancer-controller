@@ -118,17 +118,17 @@ func (t *defaultModelBuildTask) buildLoadBalancerSpec(ctx context.Context, schem
 }
 
 func (t *defaultModelBuildTask) buildLoadBalancerIPAddressType(_ context.Context) (elbv2model.IPAddressType, error) {
-	if t.combinedConfiguration.LoadBalancerType == nil {
+	if t.combinedConfiguration.LoadBalancerIPType == nil {
 		return t.defaultIPAddressType, nil
 	}
 
-	switch *t.combinedConfiguration.LoadBalancerType {
+	switch *t.combinedConfiguration.LoadBalancerIPType {
 	case elbgwv1beta1.LBIPType(elbv2model.IPAddressTypeIPV4):
 		return elbv2model.IPAddressTypeIPV4, nil
 	case elbgwv1beta1.LBIPType(elbv2model.IPAddressTypeDualStack):
 		return elbv2model.IPAddressTypeDualStack, nil
 	default:
-		return "", errors.Errorf("unknown IPAddressType: %v", *t.combinedConfiguration.LoadBalancerType)
+		return "", errors.Errorf("unknown IPAddressType: %v", *t.combinedConfiguration.LoadBalancerIPType)
 	}
 }
 

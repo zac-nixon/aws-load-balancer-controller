@@ -177,8 +177,8 @@ func (in *NLBGatewayConfigurationSpec) DeepCopyInto(out *NLBGatewayConfiguration
 		*out = new(LBScheme)
 		**out = **in
 	}
-	if in.LoadBalancerType != nil {
-		in, out := &in.LoadBalancerType, &out.LoadBalancerType
+	if in.LoadBalancerIPType != nil {
+		in, out := &in.LoadBalancerIPType, &out.LoadBalancerIPType
 		*out = new(LBIPType)
 		**out = **in
 	}

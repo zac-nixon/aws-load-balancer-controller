@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: targetgroupconfigurations.nlbgateway.k8s.nlb.aws
+  name: targetgroupconfigurations.gateway.k8s.aws
 spec:
-  group: nlbgateway.k8s.nlb.aws
+  group: gateway.k8s.aws
   names:
     kind: TargetGroupConfiguration
     listKind: TargetGroupConfigurationList

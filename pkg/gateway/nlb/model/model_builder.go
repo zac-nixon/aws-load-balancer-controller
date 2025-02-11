@@ -43,7 +43,7 @@ type ModelBuilder interface {
 func NewDefaultModelBuilder(subnetsResolver networking.SubnetsResolver,
 	vpcInfoProvider networking.VPCInfoProvider, vpcID string, trackingProvider tracking.Provider,
 	elbv2TaggingManager elbv2deploy.TaggingManager, ec2Client services.EC2, featureGates config.FeatureGates, clusterName string, defaultTags map[string]string,
-	externalManagedTags []string, defaultSSLPolicy string, defaultTargetType string, defaultLoadBalancerScheme string, enableIPTargetType bool,
+	externalManagedTags []string, defaultSSLPolicy string, defaultTargetType string, defaultLoadBalancerScheme string,
 	backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, enableBackendSG bool,
 	disableRestrictedSGRules bool, logger logr.Logger) *defaultModelBuilder {
 	return &defaultModelBuilder{
@@ -59,7 +59,6 @@ func NewDefaultModelBuilder(subnetsResolver networking.SubnetsResolver,
 		defaultSSLPolicy:          defaultSSLPolicy,
 		defaultTargetType:         elbv2model.TargetType(defaultTargetType),
 		defaultLoadBalancerScheme: elbv2model.LoadBalancerScheme(defaultLoadBalancerScheme),
-		enableIPTargetType:        enableIPTargetType,
 		backendSGProvider:         backendSGProvider,
 		sgResolver:                sgResolver,
 		ec2Client:                 ec2Client,

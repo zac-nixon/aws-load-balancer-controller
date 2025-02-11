@@ -10,8 +10,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway/eventhandlers"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy"
+	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/common"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/nlb"
 	nlbgatewaymodel "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/nlb/model"
@@ -31,6 +34,9 @@ import (
 // TODO - Remove references to ServiceEventReason..
 
 const (
+	// the tag applied to all resources created by this controller.
+	gatewayTagPrefix = "gateway.k8s.aws.nlb"
+
 	// the groupVersion used by Gateway & GatewayClass resources.
 	gatewayResourceGroupVersion = "gateway.networking.k8s.io/v1"
 
@@ -42,23 +48,31 @@ const (
 )
 
 // NewNLBGatewayReconciler constructs a reconciler that responds to gateway object changes
-func NewNLBGatewayReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, configurationGetter nlb.GatewayConfigurationGetter, logger logr.Logger) *nlbGatewayClassReconciler {
+func NewNLBGatewayReconciler(cloud aws.Cloud, k8sClient client.Client, configurationGetter nlb.GatewayConfigurationGetter, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger) *nlbGatewayReconciler {
 
-	// TODO -- Add stack marshaller and deployer here. sg provider
+	trackingProvider := tracking.NewDefaultProvider(gatewayTagPrefix, controllerConfig.ClusterName)
+	modelBuilder := nlbgatewaymodel.NewDefaultModelBuilder(subnetResolver, vpcInfoProvider, cloud.VpcID(), trackingProvider, elbv2TaggingManager, cloud.EC2(), controllerConfig.FeatureGates, controllerConfig.ClusterName, controllerConfig.DefaultTags, controllerConfig.ExternalManagedTags, controllerConfig.DefaultSSLPolicy, controllerConfig.DefaultTargetType, controllerConfig.DefaultLoadBalancerScheme, backendSGProvider, sgResolver, controllerConfig.EnableBackendSecurityGroup, controllerConfig.DisableRestrictedSGRules, logger)
 
-	return &nlbGatewayClassReconciler{
-		k8sClient:        k8sClient,
-		finalizerManager: finalizerManager,
-		eventRecorder:    eventRecorder,
-		logger:           logger,
+	stackMarshaller := deploy.NewDefaultStackMarshaller()
+	stackDeployer := deploy.NewDefaultStackDeployer(cloud, k8sClient, networkingSGManager, networkingSGReconciler, elbv2TaggingManager, controllerConfig, gatewayTagPrefix, logger)
+
+	return &nlbGatewayReconciler{
+		k8sClient:         k8sClient,
+		modelBuilder:      modelBuilder,
+		backendSGProvider: backendSGProvider,
+		stackMarshaller:   stackMarshaller,
+		stackDeployer:     stackDeployer,
+		finalizerManager:  finalizerManager,
+		eventRecorder:     eventRecorder,
+		logger:            logger,
 
 		config:              controllerConfig.NLBGatewayConfig,
 		configurationGetter: configurationGetter,
 	}
 }
 
-// nlbGatewayClassReconciler reconciles an NLB Gateway Classes .
-type nlbGatewayClassReconciler struct {
+// nlbGatewayReconciler reconciles an NLB Gateway.
+type nlbGatewayReconciler struct {
 	k8sClient           client.Client
 	modelBuilder        nlbgatewaymodel.ModelBuilder
 	backendSGProvider   networking.BackendSGProvider
@@ -71,20 +85,37 @@ type nlbGatewayClassReconciler struct {
 	configurationGetter nlb.GatewayConfigurationGetter
 }
 
-//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways/finalizers,verbs=update
 
-func (r *nlbGatewayClassReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	return runtime.HandleReconcileError(r.reconcileHelper(ctx, req), r.logger)
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=udproutes,verbs=get;list;watch
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=udproutes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=udproutes/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes,verbs=get;list;watch
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=elbv2.k8s.aws,resources=targetgroupbindings,verbs=get;list;watch
+//+kubebuilder:rbac:groups=elbv2.k8s.aws,resources=targetgroupbindings/status,verbs=get;update;patch
+
+func (r *nlbGatewayReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+	err := r.reconcileHelper(ctx, req)
+	if err != nil {
+		r.logger.Error(err, "Got this error!")
+	}
+	return runtime.HandleReconcileError(err, r.logger)
 }
 
-func (r *nlbGatewayClassReconciler) reconcileHelper(ctx context.Context, req reconcile.Request) error {
+func (r *nlbGatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.Request) error {
 
 	gw := &gwv1.Gateway{}
 	if err := r.k8sClient.Get(ctx, req.NamespacedName, gw); err != nil {
 		return client.IgnoreNotFound(err)
 	}
+
+	r.logger.Info("Got request for reconcile", "gw", *gw)
 
 	gwClass := &gwv1.GatewayClass{}
 
@@ -147,7 +178,7 @@ func (r *nlbGatewayClassReconciler) reconcileHelper(ctx context.Context, req rec
 	return r.reconcileUpdate(ctx, gw, stack, lb, backendSGRequired)
 }
 
-func (r *nlbGatewayClassReconciler) reconcileDelete(ctx context.Context, gw *gwv1.Gateway, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute) error {
+func (r *nlbGatewayReconciler) reconcileDelete(ctx context.Context, gw *gwv1.Gateway, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute) error {
 
 	if len(udpRoutes) != 0 || len(tcpRoutes) != 0 {
 		// TODO - Better error messaging (e.g. tell user the routes that are still attached)
@@ -157,7 +188,7 @@ func (r *nlbGatewayClassReconciler) reconcileDelete(ctx context.Context, gw *gwv
 	return r.finalizerManager.RemoveFinalizers(ctx, gw, gatewayFinalizer)
 }
 
-func (r *nlbGatewayClassReconciler) reconcileUpdate(ctx context.Context, gw *gwv1.Gateway, stack core.Stack,
+func (r *nlbGatewayReconciler) reconcileUpdate(ctx context.Context, gw *gwv1.Gateway, stack core.Stack,
 	lb *elbv2model.LoadBalancer, backendSGRequired bool) error {
 
 	if err := r.finalizerManager.AddFinalizers(ctx, gw, gatewayFinalizer); err != nil {
@@ -187,7 +218,7 @@ func (r *nlbGatewayClassReconciler) reconcileUpdate(ctx context.Context, gw *gwv
 	return nil
 }
 
-func (r *nlbGatewayClassReconciler) deployModel(ctx context.Context, gw *gwv1.Gateway, stack core.Stack) error {
+func (r *nlbGatewayReconciler) deployModel(ctx context.Context, gw *gwv1.Gateway, stack core.Stack) error {
 	if err := r.stackDeployer.Deploy(ctx, stack); err != nil {
 		var requeueNeededAfter *runtime.RequeueNeededAfter
 		if errors.As(err, &requeueNeededAfter) {
@@ -200,7 +231,7 @@ func (r *nlbGatewayClassReconciler) deployModel(ctx context.Context, gw *gwv1.Ga
 	return nil
 }
 
-func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes map[gwv1.Listener][]common.ControllerRoute, gatewayConfig *elbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
+func (r *nlbGatewayReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, gwClass *gwv1.GatewayClass, routes map[gwv1.Listener][]common.ControllerRoute, gatewayConfig *elbgwv1beta1.NLBGatewayConfigurationSpec) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack, lb, backendSGRequired, err := r.modelBuilder.Build(ctx, gw, gwClass, routes, gatewayConfig)
 	if err != nil {
 		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
@@ -217,7 +248,7 @@ func (r *nlbGatewayClassReconciler) buildModel(ctx context.Context, gw *gwv1.Gat
 
 // gw (nlb) -> route (listener) -> service (target group)
 // We already know via parent refs that these routes belong to the gateway.
-func (r *nlbGatewayClassReconciler) mapRoutesToGatewayListener(ctx context.Context, gw *gwv1.Gateway, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute) (map[gwv1.Listener][]common.ControllerRoute, error) {
+func (r *nlbGatewayReconciler) mapRoutesToGatewayListener(ctx context.Context, gw *gwv1.Gateway, udpRoutes []gwalpha2.UDPRoute, tcpRoutes []gwalpha2.TCPRoute) (map[gwv1.Listener][]common.ControllerRoute, error) {
 
 	routeMap := map[gwv1.Listener][]common.ControllerRoute{}
 
@@ -262,7 +293,7 @@ func (r *nlbGatewayClassReconciler) mapRoutesToGatewayListener(ctx context.Conte
 	return routeMap, nil
 }
 
-func (r *nlbGatewayClassReconciler) doesRouteBelongToListener(listener *gwv1.Listener, port *gwv1.PortNumber, sectionName *gwv1.SectionName) bool {
+func (r *nlbGatewayReconciler) doesRouteBelongToListener(listener *gwv1.Listener, port *gwv1.PortNumber, sectionName *gwv1.SectionName) bool {
 	if port != nil && sectionName != nil {
 		return listener.Port == *port && listener.Name == *sectionName
 	}
@@ -278,7 +309,7 @@ func (r *nlbGatewayClassReconciler) doesRouteBelongToListener(listener *gwv1.Lis
 	return false
 }
 
-func (r *nlbGatewayClassReconciler) doesListenerNamespaceAllowAttachment(listener *gwv1.Listener, gatewayNamespace string, routeNamespace string) (bool, error) {
+func (r *nlbGatewayReconciler) doesListenerNamespaceAllowAttachment(listener *gwv1.Listener, gatewayNamespace string, routeNamespace string) (bool, error) {
 	if listener.AllowedRoutes == nil {
 		return false, nil
 	}
@@ -305,7 +336,7 @@ func (r *nlbGatewayClassReconciler) doesListenerNamespaceAllowAttachment(listene
 }
 
 // filterToRelevantRoutes filters the route lists to only routes that are currently attached to the Gateway.
-func (r *nlbGatewayClassReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udpRoutes *gwalpha2.UDPRouteList, tcpRoutes *gwalpha2.TCPRouteList) ([]gwalpha2.UDPRoute, []gwalpha2.TCPRoute) {
+func (r *nlbGatewayReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udpRoutes *gwalpha2.UDPRouteList, tcpRoutes *gwalpha2.TCPRouteList) ([]gwalpha2.UDPRoute, []gwalpha2.TCPRoute) {
 
 	relevantTCPRoutes := make([]gwalpha2.TCPRoute, 0)
 	for _, route := range tcpRoutes.Items {
@@ -355,7 +386,7 @@ func (r *nlbGatewayClassReconciler) filterToRelevantRoutes(gw *gwv1.Gateway, udp
 	return relevantUDPRoutes, relevantTCPRoutes
 }
 
-func (r *nlbGatewayClassReconciler) updateGatewayStatus(ctx context.Context, lbDNS string, gw *gwv1.Gateway) error {
+func (r *nlbGatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS string, gw *gwv1.Gateway) error {
 	// TODO Consider LB ARN.
 
 	// Gateway Address Status
@@ -381,7 +412,7 @@ func (r *nlbGatewayClassReconciler) updateGatewayStatus(ctx context.Context, lbD
 	return nil
 }
 
-func (r *nlbGatewayClassReconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
+func (r *nlbGatewayReconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
 	gatewayClassHandler := eventhandlers.NewEnqueueRequestsForGatewayClassEvent(r.logger, r.k8sClient, r.config)
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("nlbgateway").

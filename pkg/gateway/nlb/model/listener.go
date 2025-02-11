@@ -19,6 +19,7 @@ func (t *defaultModelBuildTask) buildListeners(ctx context.Context, scheme elbv2
 	for _, listener := range t.gw.Spec.Listeners {
 		routeList, ok := t.routes[listener]
 		if !ok || len(routeList) == 0 {
+			t.logger.Info("Ignoring Gateway Listener with no routes attached", "gw", t.gw, "listener", listener)
 			continue
 		}
 		sslCfg := t.buildListenerConfig(listener)

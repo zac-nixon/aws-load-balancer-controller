@@ -19,6 +19,7 @@ package main
 import (
 	"k8s.io/client-go/util/workqueue"
 	"os"
+	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/nlbgateway/gateway_class"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/throttle"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/config"
+	nlb_gateway "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/nlb"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/inject"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	awsmetrics "sigs.k8s.io/aws-load-balancer-controller/pkg/metrics/aws"
@@ -54,6 +56,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -67,6 +70,7 @@ func init() {
 
 	_ = elbv2api.AddToScheme(scheme)
 	_ = gwv1.Install(scheme)
+	_ = gwalpha2.Install(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -139,8 +143,8 @@ func main() {
 		finalizerManager, sgManager, sgReconciler, subnetResolver, vpcInfoProvider, elbv2TaggingManager,
 		controllerCFG, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("service"))
 
-	nlbGatewayClassReconciler := gateway_class.NewNLBGatewayClassReconciler(mgr.GetClient(), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, ctrl.Log.WithName("controllers").WithName("nlbgateway"))
-
+	nlbGatewayClassReconciler := gateway_class.NewNLBGatewayClassReconciler(mgr.GetClient(), mgr.GetEventRecorderFor("nlbgatewayclass"), controllerCFG, ctrl.Log.WithName("controllers").WithName("nlbgatewayclass"))
+	nlbGatewayReconciler := gateway.NewNLBGatewayReconciler(cloud, mgr.GetClient(), nlb_gateway.NewGatewayConfigurationGetter(mgr.GetClient()), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("nlbgateway"))
 	delayingQueue := workqueue.NewDelayingQueueWithConfig(workqueue.DelayingQueueConfig{
 		Name: "delayed-target-group-binding",
 	})
@@ -163,17 +167,24 @@ func main() {
 				os.Exit(1)
 			}
 		}
+	}
 
-		if err := tgbReconciler.SetupWithManager(ctx, mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "TargetGroupBinding")
-			os.Exit(1)
-		}
+	if err := tgbReconciler.SetupWithManager(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TargetGroupBinding")
+		os.Exit(1)
 	}
 
 	// TODO: gate this
 	err = nlbGatewayClassReconciler.SetupWithManager(ctx, mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NLB Gateway Class")
+		os.Exit(1)
+	}
+
+	// TODO: gate this
+	err = nlbGatewayReconciler.SetupWithManager(ctx, mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NLB Gateway")
 		os.Exit(1)
 	}
 

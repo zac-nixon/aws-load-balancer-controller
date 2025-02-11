@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: nlbgatewayconfigurations.nlbgateway.k8s.nlb.aws
+  name: nlbgatewayconfigurations.gateway.k8s.aws
 spec:
-  group: nlbgateway.k8s.nlb.aws
+  group: gateway.k8s.aws
   names:
     kind: NLBGatewayConfiguration
     listKind: NLBGatewayConfigurationList
@@ -46,8 +46,9 @@ spec:
                   cluster capabilities
                 type: boolean
               accessLogConfiguration:
-                description: loadBalancerAttributes optional access log configuration
-                  for the load balancer.
+                description: |-
+                  DONE
+                  loadBalancerAttributes optional access log configuration for the load balancer.
                 properties:
                   accessLogsEnabled:
                     description: accessLogsEnabled whether or not that access logs
@@ -61,68 +62,86 @@ spec:
                     type: string
                 type: object
               enableBackendSecurityGroupRules:
-                description: enableBackendSecurityGroupRules an optional boolean flag
-                  that controls whether the controller should automatically add the
-                  ingress rules to the instance/ENI security group.
+                description: |-
+                  DONE
+                  enableBackendSecurityGroupRules an optional boolean flag that controls whether the controller should automatically add the ingress rules to the instance/ENI security group.
                 type: boolean
               enableCrossZoneLoadBalancing:
-                description: crossZoneLoadBalancingEnabled optional boolean that toggles
-                  routing across availability zones.
+                description: |-
+                  DONE
+                  crossZoneLoadBalancingEnabled optional boolean that toggles routing across availability zones.
                 type: boolean
               extraResourceTags:
                 additionalProperties:
                   type: string
-                description: extraResourceTags an optional map of additional tags
-                  to apply to AWS resources.
+                description: |-
+                  DONE
+                  extraResourceTags an optional map of additional tags to apply to AWS resources.
                 type: object
               listenerAttributes:
                 additionalProperties:
                   additionalProperties:
                     type: string
                   type: object
-                description: listenerAttributes an optional map of attributes that
-                  maps listeners protocol + port to their attributes
+                description: |-
+                  DONE
+                  listenerAttributes an optional map of attributes that maps listeners protocol + port to their attributes
                 type: object
               loadBalancerAttributes:
                 additionalProperties:
                   type: string
-                description: loadBalancerAttributes an optional map of attributes
-                  to apply to the load balancer.
+                description: |-
+                  DONE
+                  loadBalancerAttributes an optional map of attributes to apply to the load balancer.
                 type: object
+              loadBalancerIPType:
+                description: |-
+                  DONE
+                  loadBalancerIPType defines what kind of load balancer to provision (ipv4, dual stack)
+                enum:
+                - ipv4
+                - dualstack
+                type: string
               loadBalancerName:
-                description: loadBalancerName defines the name of the NLB to provision.
-                  If unspecified, it will be automatically generated.
+                description: |-
+                  DONE
+                  loadBalancerName defines the name of the NLB to provision. If unspecified, it will be automatically generated.
                 maxLength: 32
                 minLength: 1
                 type: string
               loadBalancerScheme:
-                description: loadBalancerScheme defines the type of NLB to provision.
-                  If unspecified, it will be automatically inferred.
+                description: |-
+                  DONE
+                  loadBalancerScheme defines the type of NLB to provision. If unspecified, it will be automatically inferred.
                 enum:
                 - internal
                 - internet-facing
                 type: string
               loadBalancerSecurityGroupPrefixes:
-                description: loadBalancerSecurityGroupPrefixes an optional list of
-                  prefixes that are allowed to access the NLB.
+                description: |-
+                  DONE
+                  loadBalancerSecurityGroupPrefixes an optional list of prefixes that are allowed to access the NLB.
                 items:
                   type: string
                 type: array
               loadBalancerSecurityGroups:
-                description: loadBalancerSecurityGroups an optional list of security
-                  group ids or names to apply to the NLB
+                description: |-
+                  DONE
+                  loadBalancerSecurityGroups an optional list of security group ids or names to apply to the NLB
                 items:
                   type: string
                 type: array
               loadBalancerSourceRanges:
-                description: loadBalancerSourceRanges an optional list of CIDRs that
-                  are allowed to access the NLB.
+                description: |-
+                  DONE - But this is defined in the TG config as well.
+                  loadBalancerSourceRanges an optional list of CIDRs that are allowed to access the NLB.
                 items:
                   type: string
                 type: array
               loadBalancerSubnets:
-                description: loadBalancerSubnets an optional list of subnet ids or
-                  names to be used in the NLB
+                description: |-
+                  DONE
+                  loadBalancerSubnets an optional list of subnet ids or names to be used in the NLB
                 items:
                   description: SubnetConfiguration defines the subnet settings for
                     a Load Balancer.
@@ -145,13 +164,6 @@ spec:
                   - identifier
                   type: object
                 type: array
-              loadBalancerType:
-                description: loadBalancerIPType defines what kind of load balancer
-                  to provision (ipv4, dual stack)
-                enum:
-                - ipv4
-                - dualstack
-                type: string
               sslConfiguration:
                 additionalProperties:
                   description: SSLConfiguration defines the SSL configuration for
@@ -185,8 +197,9 @@ spec:
                   required:
                   - defaultCertificate
                   type: object
-                description: sslConfiguration an optional map that maps listener port
-                  to TLS settings.
+                description: |-
+                  DONE
+                  sslConfiguration an optional map that maps listener port to TLS settings.
                 type: object
             type: object
           status:

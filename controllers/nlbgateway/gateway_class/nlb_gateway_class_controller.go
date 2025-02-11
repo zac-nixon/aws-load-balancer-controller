@@ -49,7 +49,11 @@ type nlbGatewayClassReconciler struct {
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gatewayclasses/finalizers,verbs=update
 
 func (r *nlbGatewayClassReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	return runtime.HandleReconcileError(r.reconcile(ctx, req), r.logger)
+	err := r.reconcile(ctx, req)
+	if err != nil {
+		r.logger.Error(err, "Got this error!")
+	}
+	return runtime.HandleReconcileError(err, r.logger)
 }
 
 func (r *nlbGatewayClassReconciler) reconcile(ctx context.Context, req reconcile.Request) error {
@@ -61,6 +65,7 @@ func (r *nlbGatewayClassReconciler) reconcile(ctx context.Context, req reconcile
 		return client.IgnoreNotFound(err)
 	}
 
+	r.logger.Info("Got this gateway class", "class", gwClass)
 	if string(gwClass.Spec.ControllerName) != r.config.ControllerName {
 		r.logger.Info("Ignoring gateway class not intended for our controller")
 		return nil
@@ -69,7 +74,7 @@ func (r *nlbGatewayClassReconciler) reconcile(ctx context.Context, req reconcile
 	gwClassOld := gwClass.DeepCopy()
 
 	for _, v := range gwClass.Status.Conditions {
-		if v.Type == "Accepted" {
+		if v.Type == "Accepted" && v.Status != "True" {
 			cond := &v
 			cond.LastTransitionTime = metav1.NewTime(time.Now())
 			cond.ObservedGeneration = gwClass.Generation
