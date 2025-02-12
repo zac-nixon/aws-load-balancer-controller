@@ -94,8 +94,10 @@ func (t *defaultModelBuildTask) buildTargetGroupSpec(ctx context.Context, servic
 func (t *defaultModelBuildTask) buildTargetGroupHealthCheckConfig(tgConfig *elbgwv1beta1.TargetGroupConfiguration, service *corev1.Service, targetType elbv2model.TargetType) (*elbv2model.TargetGroupHealthCheckConfig, error) {
 	if targetType == elbv2model.TargetTypeInstance && service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeLocal &&
 		service.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		t.logger.Info("USING INSTANCE MODE")
 		return t.buildTargetGroupHealthCheckConfigForInstanceModeLocal(tgConfig, service, targetType)
 	}
+	t.logger.Info("USING DEFAULT MODE")
 	return t.buildTargetGroupHealthCheckConfigDefault(tgConfig, service, targetType)
 }
 
@@ -136,7 +138,7 @@ func (t *defaultModelBuildTask) buildTargetGroupHealthCheckConfigForInstanceMode
 	}
 	healthCheckPathPtr := t.buildTargetGroupHealthCheckPath(tgConfig, t.defaultHealthCheckPathForInstanceModeLocal, healthCheckProtocol)
 	healthCheckMatcherPtr := t.buildTargetGroupHealthCheckMatcher(tgConfig, healthCheckProtocol)
-	healthCheckPort, err := t.buildTargetGroupHealthCheckPort(tgConfig, service, intstr.FromInt(int(t.defaultHealthCheckPortForInstanceModeLocal)), targetType)
+	healthCheckPort, err := t.buildTargetGroupHealthCheckPort(tgConfig, service, strconv.Itoa(int(service.Spec.HealthCheckNodePort)), targetType)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +191,11 @@ func (t *defaultModelBuildTask) buildTargetGroupAttributes(tgConfig *elbgwv1beta
 	if tgConfig != nil && tgConfig.Spec.TargetGroupAttributes != nil {
 		rawAttributes = *tgConfig.Spec.TargetGroupAttributes
 	}
+
+	if rawAttributes == nil {
+		rawAttributes = make(map[string]string)
+	}
+
 	if _, ok := rawAttributes[tgAttrsProxyProtocolV2Enabled]; !ok {
 		rawAttributes[tgAttrsProxyProtocolV2Enabled] = strconv.FormatBool(t.defaultProxyProtocolV2Enabled)
 	}
@@ -249,12 +256,15 @@ func (t *defaultModelBuildTask) buildTargetGroupPort(targetType elbv2model.Targe
 	return 1
 }
 
-func (t *defaultModelBuildTask) buildTargetGroupHealthCheckPort(tgConfig *elbgwv1beta1.TargetGroupConfiguration, svc *corev1.Service, defaultHealthCheckPort intstr.IntOrString, targetType elbv2model.TargetType) (intstr.IntOrString, error) {
+func (t *defaultModelBuildTask) buildTargetGroupHealthCheckPort(tgConfig *elbgwv1beta1.TargetGroupConfiguration, svc *corev1.Service, defaultHealthCheckPort string, targetType elbv2model.TargetType) (intstr.IntOrString, error) {
 	var healthCheckPort intstr.IntOrString
 	if tgConfig == nil || tgConfig.Spec.HealthCheckConfig == nil || tgConfig.Spec.HealthCheckConfig.HealthCheckPath == nil {
-		healthCheckPort = defaultHealthCheckPort
+		healthCheckPort = intstr.FromString(defaultHealthCheckPort)
 	} else {
 		healthCheckPort = intstr.FromString(*tgConfig.Spec.HealthCheckConfig.HealthCheckPort)
+	}
+	if healthCheckPort.StrVal == healthCheckPortTrafficPort {
+		return healthCheckPort, nil
 	}
 	if healthCheckPort.Type == intstr.Int {
 		return healthCheckPort, nil

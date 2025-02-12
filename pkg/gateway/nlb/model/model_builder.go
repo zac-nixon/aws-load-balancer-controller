@@ -3,7 +3,6 @@ package nlbgatewaymodel
 import (
 	"context"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	elbgwv1beta1 "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/common"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -131,7 +130,7 @@ func (b *defaultModelBuilder) Build(ctx context.Context, gw *gwv1.Gateway, gwCla
 		defaultTargetType:                    b.defaultTargetType,
 		defaultLoadBalancerScheme:            b.defaultLoadBalancerScheme,
 		defaultHealthCheckProtocol:           elbv2model.ProtocolTCP,
-		defaultHealthCheckPort:               intstr.FromString(healthCheckPortTrafficPort),
+		defaultHealthCheckPort:               healthCheckPortTrafficPort,
 		defaultHealthCheckPath:               "/",
 		defaultHealthCheckInterval:           10,
 		defaultHealthCheckTimeout:            10,
@@ -199,7 +198,7 @@ type defaultModelBuildTask struct {
 	defaultTargetType                    elbv2model.TargetType
 	defaultLoadBalancerScheme            elbv2model.LoadBalancerScheme
 	defaultHealthCheckProtocol           elbv2model.Protocol
-	defaultHealthCheckPort               intstr.IntOrString
+	defaultHealthCheckPort               string
 	defaultHealthCheckPath               string
 	defaultHealthCheckInterval           int32
 	defaultHealthCheckTimeout            int32
@@ -213,7 +212,7 @@ type defaultModelBuildTask struct {
 	// Default health check settings for NLB instance mode with spec.ExternalTrafficPolicy set to Local
 	defaultHealthCheckProtocolForInstanceModeLocal           elbv2model.Protocol
 	defaultHealthCheckPathForInstanceModeLocal               string
-	defaultHealthCheckPortForInstanceModeLocal               int32
+	defaultHealthCheckPortForInstanceModeLocal               string
 	defaultHealthCheckIntervalForInstanceModeLocal           int32
 	defaultHealthCheckTimeoutForInstanceModeLocal            int32
 	defaultHealthCheckHealthyThresholdForInstanceModeLocal   int32

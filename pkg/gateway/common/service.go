@@ -60,7 +60,7 @@ func loadServices(context context.Context, client client.Client, backendRefs []g
 		tgConfig, err := resolveTargetGroupConfig(context, client, svc)
 
 		if err != nil {
-			return nil, errors.Errorf("Unable to resolve tg config")
+			return nil, errors.Wrapf(err, "Unable to resolve tg config")
 		}
 
 		svcRefs = append(svcRefs, &ServiceRef{

@@ -48,7 +48,7 @@ type ALPNPolicy elbv2.ALPNPolicy
 
 // AccessLogConfiguration defines the access log settings for a Load Balancer.
 type AccessLogConfiguration struct {
-	// accessLogsEnabled whether or not that access logs should be turned sent.
+	// accessLogsEnabled whether that access logs should be turned sent.
 	// +optional
 	AccessLogsEnabled bool `json:"accessLogsEnabled,omitempty"`
 

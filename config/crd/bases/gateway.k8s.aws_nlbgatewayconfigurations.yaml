@@ -51,8 +51,8 @@ spec:
                   loadBalancerAttributes optional access log configuration for the load balancer.
                 properties:
                   accessLogsEnabled:
-                    description: accessLogsEnabled whether or not that access logs
-                      should be turned sent.
+                    description: accessLogsEnabled whether that access logs should
+                      be turned sent.
                     type: boolean
                   bucketName:
                     description: bucketName the bucket to send access logs to.

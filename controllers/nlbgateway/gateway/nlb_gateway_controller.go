@@ -97,8 +97,11 @@ type nlbGatewayReconciler struct {
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes/finalizers,verbs=update
 
-//+kubebuilder:rbac:groups=elbv2.k8s.aws,resources=targetgroupbindings,verbs=get;list;watch
-//+kubebuilder:rbac:groups=elbv2.k8s.aws,resources=targetgroupbindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=gateway.k8s.aws,resources=nlbgatewayconfigurations,verbs=get;list;watch
+//+kubebuilder:rbac:groups=gateway.k8s.aws,resources=nlbgatewayconfigurations/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=gateway.k8s.aws,resources=targetgroupconfigurations,verbs=get;list;watch
+//+kubebuilder:rbac:groups=gateway.k8s.aws,resources=targetgroupconfigurations/status,verbs=get;update;patch
 
 func (r *nlbGatewayReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	err := r.reconcileHelper(ctx, req)
@@ -154,7 +157,17 @@ func (r *nlbGatewayReconciler) reconcileHelper(ctx context.Context, req reconcil
 
 	relevantUDPRoutes, relevantTCPRoutes := r.filterToRelevantRoutes(gw, udpRoutes, tcpRoutes)
 
+	r.logger.Info("Resolved these routes", "tcp", len(relevantTCPRoutes), "udp", len(relevantUDPRoutes))
+
 	allRoutes, err := r.mapRoutesToGatewayListener(ctx, gw, relevantUDPRoutes, relevantTCPRoutes)
+
+	if err != nil {
+		return err
+	}
+
+	for l, routes := range allRoutes {
+		r.logger.Info("Resolved this route listener combo", "listener", l.Name, "all routes", len(routes))
+	}
 
 	stack, lb, backendSGRequired, err := r.buildModel(ctx, gw, gwClass, allRoutes, gatewayConfig)
 
@@ -169,11 +182,6 @@ func (r *nlbGatewayReconciler) reconcileHelper(ctx context.Context, req reconcil
 		}
 		return err
 	}
-
-	// Fetch GatewayClass Config Object + Gateway Config Object
-	// Merge configuration objects
-	// Build NLB definition
-	// Deploy NLB
 
 	return r.reconcileUpdate(ctx, gw, stack, lb, backendSGRequired)
 }
@@ -414,12 +422,15 @@ func (r *nlbGatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS st
 
 func (r *nlbGatewayReconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
 	gatewayClassHandler := eventhandlers.NewEnqueueRequestsForGatewayClassEvent(r.logger, r.k8sClient, r.config)
+	tcpRouteHandler := eventhandlers.NewEnqueueRequestsForTCPRouteEvent(r.logger, r.k8sClient, r.config)
+	udpRouteHandler := eventhandlers.NewEnqueueRequestsForUDPRouteEvent(r.logger, r.k8sClient, r.config)
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("nlbgateway").
 		// Anything that influences a gateway object must be added here.
-		// E.g. a CRD defining a gateway would go here too.
 		For(&gwv1.Gateway{}).
 		Watches(&gwv1.GatewayClass{}, gatewayClassHandler).
+		Watches(&gwalpha2.TCPRoute{}, tcpRouteHandler).
+		Watches(&gwalpha2.UDPRoute{}, udpRouteHandler).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.config.MaxConcurrentReconciles,
 		}).

@@ -116,7 +116,6 @@ rules:
   resources:
   - targetgroupbindings/status
   verbs:
-  - get
   - patch
   - update
 - apiGroups:
@@ -134,6 +133,38 @@ rules:
   resources:
   - ingresses/status
   verbs:
+  - patch
+  - update
+- apiGroups:
+  - gateway.k8s.aws
+  resources:
+  - nlbgatewayconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.k8s.aws
+  resources:
+  - nlbgatewayconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gateway.k8s.aws
+  resources:
+  - targetgroupconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.k8s.aws
+  resources:
+  - targetgroupconfigurations/status
+  verbs:
+  - get
   - patch
   - update
 - apiGroups:
