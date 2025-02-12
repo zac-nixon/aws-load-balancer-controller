@@ -94,10 +94,8 @@ func (t *defaultModelBuildTask) buildTargetGroupSpec(ctx context.Context, servic
 func (t *defaultModelBuildTask) buildTargetGroupHealthCheckConfig(tgConfig *elbgwv1beta1.TargetGroupConfiguration, service *corev1.Service, targetType elbv2model.TargetType) (*elbv2model.TargetGroupHealthCheckConfig, error) {
 	if targetType == elbv2model.TargetTypeInstance && service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeLocal &&
 		service.Spec.Type == corev1.ServiceTypeLoadBalancer {
-		t.logger.Info("USING INSTANCE MODE")
 		return t.buildTargetGroupHealthCheckConfigForInstanceModeLocal(tgConfig, service, targetType)
 	}
-	t.logger.Info("USING DEFAULT MODE")
 	return t.buildTargetGroupHealthCheckConfigDefault(tgConfig, service, targetType)
 }
 
