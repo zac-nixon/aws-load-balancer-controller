@@ -2,7 +2,7 @@
 MAKEFILE_PATH = $(dir $(realpath -s $(firstword $(MAKEFILE_LIST))))
 
 # Image URL to use all building/pushing image targets
-IMG ?= public.ecr.aws/eks/aws-load-balancer-controller:v2.11.0
+IMG ?= 565768096483.dkr.ecr.us-west-2.amazonaws.com/nixozach/lbc:ipam
 # Image URL to use for builder stage in Docker build
 GOLANG_VERSION ?= $(shell cat .go-version)
 BUILD_IMAGE ?= public.ecr.aws/docker/library/golang:$(GOLANG_VERSION)
@@ -16,7 +16,7 @@ IMG_SBOM ?= none
 CRD_OPTIONS ?= "crd:crdVersions=v1"
 
 # Whether to override AWS SDK models. set to 'y' when we need to build against custom AWS SDK models.
-AWS_SDK_MODEL_OVERRIDE ?= "n"
+AWS_SDK_MODEL_OVERRIDE ?= "y"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
