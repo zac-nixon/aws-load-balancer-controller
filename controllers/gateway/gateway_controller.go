@@ -17,6 +17,8 @@ import (
 	gatewaymodel "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/model"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
+	lbcmetrics "sigs.k8s.io/aws-load-balancer-controller/pkg/metrics/lbc"
+	metricsutil "sigs.k8s.io/aws-load-balancer-controller/pkg/metrics/util"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
@@ -36,23 +38,23 @@ type Reconciler interface {
 var _ Reconciler = &gatewayReconciler{}
 
 // NewNLBGatewayReconciler constructs a gateway reconciler to handle specifically for NLB gateways
-func NewNLBGatewayReconciler(routeLoader routeutils.Loader, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger) Reconciler {
-	return newGatewayReconciler(nlbGatewayController, controllerConfig.NLBGatewayMaxConcurrentReconciles, nlbGatewayTagPrefix, nlbGatewayFinalizer, routeLoader, routeutils.L4RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, logger)
+func NewNLBGatewayReconciler(routeLoader routeutils.Loader, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger, metricsCollector lbcmetrics.MetricCollector, reconcileCounters *metricsutil.ReconcileCounters) Reconciler {
+	return newGatewayReconciler(nlbGatewayController, controllerConfig.NLBGatewayMaxConcurrentReconciles, nlbGatewayTagPrefix, nlbGatewayFinalizer, routeLoader, routeutils.L4RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, logger, metricsCollector, reconcileCounters)
 }
 
 // NewALBGatewayReconciler constructs a gateway reconciler to handle specifically for ALB gateways
-func NewALBGatewayReconciler(routeLoader routeutils.Loader, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger) Reconciler {
-	return newGatewayReconciler(albGatewayController, controllerConfig.ALBGatewayMaxConcurrentReconciles, albGatewayTagPrefix, albGatewayFinalizer, routeLoader, routeutils.L7RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, logger)
+func NewALBGatewayReconciler(routeLoader routeutils.Loader, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger, metricsCollector lbcmetrics.MetricCollector, reconcileCounters *metricsutil.ReconcileCounters) Reconciler {
+	return newGatewayReconciler(albGatewayController, controllerConfig.ALBGatewayMaxConcurrentReconciles, albGatewayTagPrefix, albGatewayFinalizer, routeLoader, routeutils.L7RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, logger, metricsCollector, reconcileCounters)
 }
 
 // newGatewayReconciler constructs a reconciler that responds to gateway object changes
-func newGatewayReconciler(controllerName string, maxConcurrentReconciles int, gatewayTagPrefix string, finalizer string, routeLoader routeutils.Loader, routeFilter routeutils.LoadRouteFilter, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger) Reconciler {
+func newGatewayReconciler(controllerName string, maxConcurrentReconciles int, gatewayTagPrefix string, finalizer string, routeLoader routeutils.Loader, routeFilter routeutils.LoadRouteFilter, cloud services.Cloud, k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger, metricsCollector lbcmetrics.MetricCollector, reconcileCounters *metricsutil.ReconcileCounters) Reconciler {
 
 	trackingProvider := tracking.NewDefaultProvider(gatewayTagPrefix, controllerConfig.ClusterName)
 	modelBuilder := gatewaymodel.NewDefaultModelBuilder(subnetResolver, vpcInfoProvider, cloud.VpcID(), trackingProvider, elbv2TaggingManager, cloud.EC2(), controllerConfig.FeatureGates, controllerConfig.ClusterName, controllerConfig.DefaultTags, sets.New(controllerConfig.ExternalManagedTags...), controllerConfig.DefaultSSLPolicy, controllerConfig.DefaultTargetType, controllerConfig.DefaultLoadBalancerScheme, backendSGProvider, sgResolver, controllerConfig.EnableBackendSecurityGroup, controllerConfig.DisableRestrictedSGRules, logger)
 
 	stackMarshaller := deploy.NewDefaultStackMarshaller()
-	stackDeployer := deploy.NewDefaultStackDeployer(cloud, k8sClient, networkingSGManager, networkingSGReconciler, elbv2TaggingManager, controllerConfig, gatewayTagPrefix, logger)
+	stackDeployer := deploy.NewDefaultStackDeployer(cloud, k8sClient, networkingSGManager, networkingSGReconciler, elbv2TaggingManager, controllerConfig, gatewayTagPrefix, logger, metricsCollector, controllerName)
 
 	return &gatewayReconciler{
 		controllerName:          controllerName,
@@ -68,6 +70,8 @@ func newGatewayReconciler(controllerName string, maxConcurrentReconciles int, ga
 		finalizerManager:        finalizerManager,
 		eventRecorder:           eventRecorder,
 		logger:                  logger,
+		metricsCollector:        metricsCollector,
+		reconcileCounters:       reconcileCounters,
 	}
 }
 
@@ -86,6 +90,8 @@ type gatewayReconciler struct {
 	finalizerManager        k8s.FinalizerManager
 	eventRecorder           record.EventRecorder
 	logger                  logr.Logger
+	metricsCollector        lbcmetrics.MetricCollector
+	reconcileCounters       *metricsutil.ReconcileCounters
 }
 
 // TODO - Add Gateway and TG configuration permissions
@@ -219,7 +225,7 @@ func (r *gatewayReconciler) reconcileUpdate(ctx context.Context, gw *gwv1.Gatewa
 }
 
 func (r *gatewayReconciler) deployModel(ctx context.Context, gw *gwv1.Gateway, stack core.Stack) error {
-	if err := r.stackDeployer.Deploy(ctx, stack); err != nil {
+	if err := r.stackDeployer.Deploy(ctx, stack, r.metricsCollector, r.controllerName); err != nil {
 		var requeueNeededAfter *runtime.RequeueNeededAfter
 		if errors.As(err, &requeueNeededAfter) {
 			return err

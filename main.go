@@ -134,7 +134,11 @@ func main() {
 	sgReconciler := networking.NewDefaultSecurityGroupReconciler(sgManager, ctrl.Log)
 	azInfoProvider := networking.NewDefaultAZInfoProvider(cloud.EC2(), ctrl.Log.WithName("az-info-provider"))
 	vpcInfoProvider := networking.NewDefaultVPCInfoProvider(cloud.EC2(), ctrl.Log.WithName("vpc-info-provider"))
-	subnetResolver := networking.NewDefaultSubnetsResolver(azInfoProvider, cloud.EC2(), cloud.VpcID(), controllerCFG.ClusterName, ctrl.Log.WithName("subnets-resolver"))
+	subnetResolver := networking.NewDefaultSubnetsResolver(azInfoProvider, cloud.EC2(), cloud.VpcID(), controllerCFG.ClusterName,
+		controllerCFG.FeatureGates.Enabled(config.SubnetsClusterTagCheck),
+		controllerCFG.FeatureGates.Enabled(config.ALBSingleSubnet),
+		controllerCFG.FeatureGates.Enabled(config.SubnetDiscoveryByReachability),
+		ctrl.Log.WithName("subnets-resolver"))
 	multiClusterManager := targetgroupbinding.NewMultiClusterManager(mgr.GetClient(), mgr.GetAPIReader(), ctrl.Log)
 	tgbResManager := targetgroupbinding.NewDefaultResourceManager(mgr.GetClient(), cloud.ELBV2(), cloud.EC2(),
 		podInfoRepo, sgManager, sgReconciler, vpcInfoProvider, multiClusterManager, lbcMetricsCollector,
@@ -180,13 +184,13 @@ func main() {
 
 	if controllerCFG.FeatureGates.Enabled(config.GatewayAPI) {
 		routeLoader := routeutils.NewLoader(mgr.GetClient())
-		nlbGatewayReconciler := gateway.NewNLBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("nlbgateway"))
+		nlbGatewayReconciler := gateway.NewNLBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("nlbgateway"), lbcMetricsCollector, reconcileCounters)
 		nlbControllerError := nlbGatewayReconciler.SetupWithManager(mgr)
 		if nlbControllerError != nil {
 			setupLog.Error(nlbControllerError, "Unable to create NLB Gateway controller")
 			os.Exit(1)
 		}
-		albGatewayReconciler := gateway.NewALBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("albgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("albgateway"))
+		albGatewayReconciler := gateway.NewALBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("albgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("albgateway"), lbcMetricsCollector, reconcileCounters)
 		albControllerErr := albGatewayReconciler.SetupWithManager(mgr)
 		if albControllerErr != nil {
 			setupLog.Error(albControllerErr, "Unable to create ALB Gateway controller")
