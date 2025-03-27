@@ -19,6 +19,8 @@ package main
 import (
 	"k8s.io/client-go/util/workqueue"
 	"os"
+	"sigs.k8s.io/aws-load-balancer-controller/controllers/gateway"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 
@@ -161,6 +163,22 @@ func main() {
 	if err := tgbReconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TargetGroupBinding")
 		os.Exit(1)
+	}
+
+	if controllerCFG.FeatureGates.Enabled(config.GatewayAPI) {
+		routeLoader := routeutils.NewLoader(mgr.GetClient())
+		nlbGatewayReconciler := gateway.NewNLBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("nlbgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("nlbgateway"))
+		nlbControllerError := nlbGatewayReconciler.SetupWithManager(mgr)
+		if nlbControllerError != nil {
+			setupLog.Error(nlbControllerError, "Unable to create NLB Gateway controller")
+			os.Exit(1)
+		}
+		albGatewayReconciler := gateway.NewALBGatewayReconciler(routeLoader, cloud, mgr.GetClient(), mgr.GetEventRecorderFor("albgateway"), controllerCFG, finalizerManager, sgReconciler, sgManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ctrl.Log.WithName("controllers").WithName("albgateway"))
+		albControllerErr := albGatewayReconciler.SetupWithManager(mgr)
+		if albControllerErr != nil {
+			setupLog.Error(albControllerErr, "Unable to create ALB Gateway controller")
+			os.Exit(1)
+		}
 	}
 
 	// Add liveness probe

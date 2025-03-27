@@ -23,6 +23,7 @@ const (
 	NLBSecurityGroup             Feature = "NLBSecurityGroup"
 	ALBSingleSubnet              Feature = "ALBSingleSubnet"
 	LBCapacityReservation        Feature = "LBCapacityReservation"
+	GatewayAPI                   Feature = "ELBGatewayAPI"
 )
 
 type FeatureGates interface {
@@ -62,6 +63,7 @@ func NewFeatureGates() FeatureGates {
 			NLBSecurityGroup:             true,
 			ALBSingleSubnet:              false,
 			LBCapacityReservation:        true,
+			GatewayAPI:                   false,
 		},
 	}
 }
