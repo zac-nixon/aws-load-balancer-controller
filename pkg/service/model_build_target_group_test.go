@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
+	"strconv"
+	"testing"
+
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/golang/mock/gomock"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
-	"sort"
-	"strconv"
-	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
