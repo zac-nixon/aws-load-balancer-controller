@@ -341,6 +341,7 @@ spec:
                                 enum:
                                 - TCP
                                 - UDP
+                                - TCP_UDP
                                 type: string
                             type: object
                           type: array
