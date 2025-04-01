@@ -19,8 +19,12 @@ package main
 import (
 	"k8s.io/client-go/util/workqueue"
 	"os"
+	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/gateway"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gwbeta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	elbv2deploy "sigs.k8s.io/aws-load-balancer-controller/pkg/deploy/elbv2"
 
@@ -66,6 +70,11 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = elbv2api.AddToScheme(scheme)
+
+	gwv1.AddToScheme(scheme)
+	gwalpha2.AddToScheme(scheme)
+	elbv2gw.AddToScheme(scheme)
+	gwbeta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
