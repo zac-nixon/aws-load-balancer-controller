@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/shared_constants"
 	"strconv"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -20,10 +21,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/annotations"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
-)
-
-const (
-	healthCheckPortTrafficPort = "traffic-port"
 )
 
 func (t *defaultModelBuildTask) buildTargetGroup(ctx context.Context,
@@ -64,7 +61,7 @@ func (t *defaultModelBuildTask) buildTargetGroupBindingSpec(ctx context.Context,
 	targetType := elbv2api.TargetType(tg.Spec.TargetType)
 	targetPort := svcPort.TargetPort
 	if targetType == elbv2api.TargetTypeInstance {
-		targetPort = intstr.FromInt(int(svcPort.NodePort))
+		targetPort = intstr.FromInt32(svcPort.NodePort)
 	}
 	tgbNetworking := t.buildTargetGroupBindingNetworking(ctx, targetPort, *tg.Spec.HealthCheckConfig.Port)
 
@@ -128,7 +125,7 @@ func (t *defaultModelBuildTask) buildTargetGroupBindingNetworking(_ context.Cont
 		Protocol: &protocolTCP,
 		Port:     &targetPort,
 	})
-	if healthCheckPort.String() != healthCheckPortTrafficPort {
+	if healthCheckPort.String() != shared_constants.HealthCheckPortTrafficPort {
 		networkingPorts = append(networkingPorts, elbv2api.NetworkingPort{
 			Protocol: &protocolTCP,
 			Port:     &healthCheckPort,
@@ -340,10 +337,10 @@ func (t *defaultModelBuildTask) buildTargetGroupHealthCheckConfig(ctx context.Co
 func (t *defaultModelBuildTask) buildTargetGroupHealthCheckPort(_ context.Context, svc *corev1.Service, svcAndIngAnnotations map[string]string, targetType elbv2model.TargetType) (intstr.IntOrString, error) {
 	rawHealthCheckPort := ""
 	if exist := t.annotationParser.ParseStringAnnotation(annotations.IngressSuffixHealthCheckPort, &rawHealthCheckPort, svcAndIngAnnotations); !exist {
-		return intstr.FromString(healthCheckPortTrafficPort), nil
+		return intstr.FromString(shared_constants.HealthCheckPortTrafficPort), nil
 	}
-	if rawHealthCheckPort == healthCheckPortTrafficPort {
-		return intstr.FromString(healthCheckPortTrafficPort), nil
+	if rawHealthCheckPort == shared_constants.HealthCheckPortTrafficPort {
+		return intstr.FromString(shared_constants.HealthCheckPortTrafficPort), nil
 	}
 	healthCheckPort := intstr.Parse(rawHealthCheckPort)
 	if healthCheckPort.Type == intstr.Int {
