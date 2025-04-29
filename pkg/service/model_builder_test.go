@@ -2418,7 +2418,8 @@ func Test_defaultModelBuilderTask_Build(t *testing.T) {
                 {
                    "subnetID":"subnet-3"
                 }
-             ]
+             ],
+             "enablePrefixForIpv6SourceNat": "off"
           }
        }
     },

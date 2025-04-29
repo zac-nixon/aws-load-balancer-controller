@@ -162,6 +162,7 @@ func Test_defaultModelBuilderTask_buildListenerConfig(t *testing.T) {
 				tlsPortsSet:     sets.New[string]("83"),
 				sslPolicy:       new(string),
 				backendProtocol: "",
+				tcpUdpPortsSet:  sets.New[int32](),
 			},
 		},
 	}
@@ -173,7 +174,7 @@ func Test_defaultModelBuilderTask_buildListenerConfig(t *testing.T) {
 				annotationParser: parser,
 				service:          tt.svc,
 			}
-			got, err := builder.buildListenerConfig(context.Background())
+			got, err := builder.buildListenerConfig(context.Background(), sets.New[int32]())
 			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			} else {
@@ -302,33 +303,12 @@ func Test_defaultModelBuilderTask_buildListenerAttributes(t *testing.T) {
 	}
 }
 
-func Test_mergeServicePortsForListener(t *testing.T) {
+func Test_validateMultiProtocolUsage(t *testing.T) {
 	tests := []struct {
-		name    string
-		ports   []corev1.ServicePort
-		want    corev1.ServicePort
-		success bool
+		name        string
+		ports       []corev1.ServicePort
+		expectError bool
 	}{
-		{
-			name: "one port",
-			ports: []corev1.ServicePort{
-				{
-					Name:       "p1",
-					Port:       80,
-					TargetPort: intstr.FromInt(80),
-					Protocol:   corev1.ProtocolTCP,
-					NodePort:   31223,
-				},
-			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.ProtocolTCP,
-				NodePort:   31223,
-			},
-			success: true,
-		},
 		{
 			name: "two tcp ports, different target and node ports",
 			ports: []corev1.ServicePort{
@@ -347,14 +327,7 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31224,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.ProtocolTCP,
-				NodePort:   31223,
-			},
-			success: true,
+			expectError: true,
 		},
 		{
 			name: "two udp ports, different target and node ports",
@@ -374,14 +347,7 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31224,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.ProtocolUDP,
-				NodePort:   31223,
-			},
-			success: true,
+			expectError: true,
 		},
 		{
 			name: "one tcp and one udp, different target and node ports",
@@ -401,14 +367,6 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31224,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.ProtocolTCP,
-				NodePort:   31223,
-			},
-			success: true,
 		},
 		{
 			name: "one tcp and one udp, same target and node ports",
@@ -428,14 +386,6 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31223,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.Protocol("TCP_UDP"),
-				NodePort:   31223,
-			},
-			success: true,
 		},
 		{
 			name: "one udp and one tcp, same target and node ports",
@@ -455,14 +405,6 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31223,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.Protocol("TCP_UDP"),
-				NodePort:   31223,
-			},
-			success: true,
 		},
 		{
 			name: "one tcp and one udp, same node port, different target port",
@@ -482,14 +424,6 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31223,
 				},
 			},
-			want: corev1.ServicePort{
-				Name:       "p1",
-				Port:       80,
-				TargetPort: intstr.FromInt(80),
-				Protocol:   corev1.Protocol("TCP_UDP"),
-				NodePort:   31223,
-			},
-			success: true,
 		},
 		{
 			name: "one tcp and one udp, same node port, different target port",
@@ -516,23 +450,18 @@ func Test_mergeServicePortsForListener(t *testing.T) {
 					NodePort:   31223,
 				},
 			},
-			want:    corev1.ServicePort{},
-			success: false,
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			port, err := mergeServicePortsForListener(tt.ports)
-			if !tt.success {
-				assert.NotNil(t, err)
-				return
+			err := validateMultiProtocolUsage(tt.ports)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
-			assert.Equal(t, port.Name, tt.want.Name)
-			assert.Equal(t, port.Port, tt.want.Port)
-			assert.Equal(t, port.TargetPort.IntVal, tt.want.TargetPort.IntVal)
-			assert.Equal(t, port.Protocol, tt.want.Protocol)
-			assert.Equal(t, port.NodePort, tt.want.NodePort)
 		})
 	}
 }
