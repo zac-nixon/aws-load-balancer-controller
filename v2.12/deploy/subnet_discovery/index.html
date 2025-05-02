@@ -540,27 +540,60 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#public-subnets" class="md-nav__link">
+  <a href="#candidate-subnet-determination" class="md-nav__link">
     <span class="md-ellipsis">
-      Public subnets
+      Candidate Subnet Determination
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Candidate Subnet Determination">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#subnet-role-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet Role Tag
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subnet-reachability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet reachability
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subnet-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet Filtering
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#private-subnets" class="md-nav__link">
+  <a href="#final-selection" class="md-nav__link">
     <span class="md-ellipsis">
-      Private subnets
+      Final Selection
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-tag" class="md-nav__link">
+  <a href="#minimum-subnet-requirements" class="md-nav__link">
     <span class="md-ellipsis">
-      Common tag
+      Minimum Subnet Requirements
     </span>
   </a>
   
@@ -1274,6 +1307,73 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Metrics
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            Metrics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/metrics/prometheus/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Prometheus
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1437,27 +1537,60 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#public-subnets" class="md-nav__link">
+  <a href="#candidate-subnet-determination" class="md-nav__link">
     <span class="md-ellipsis">
-      Public subnets
+      Candidate Subnet Determination
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Candidate Subnet Determination">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#subnet-role-tag" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet Role Tag
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subnet-reachability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet reachability
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subnet-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Subnet Filtering
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#private-subnets" class="md-nav__link">
+  <a href="#final-selection" class="md-nav__link">
     <span class="md-ellipsis">
-      Private subnets
+      Final Selection
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-tag" class="md-nav__link">
+  <a href="#minimum-subnet-requirements" class="md-nav__link">
     <span class="md-ellipsis">
-      Common tag
+      Minimum Subnet Requirements
     </span>
   </a>
   
@@ -1481,18 +1614,36 @@
   
 
 
-<h1 id="subnet-auto-discovery">Subnet auto-discovery<a class="headerlink" href="#subnet-auto-discovery" title="Permanent link">&para;</a></h1>
-<p>By default, the AWS Load Balancer Controller (LBC) auto-discovers network subnets that it can create AWS Network Load Balancers (NLB) and AWS Application Load Balancers (ALB) in. ALBs require at least two subnets across Availability Zones by default, 
-set <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/configurations/#feature-gates">Feature Gate ALBSingleSubnet</a> to "true" allows using only 1 subnet for provisioning ALB. NLBs require one subnet.
-The subnets must be tagged appropriately for auto-discovery to work. The controller chooses one subnet from each Availability Zone. During auto-discovery, the controller
-considers subnets with at least eight available IP addresses. In the case of multiple qualified tagged subnets in an Availability Zone, the controller chooses the first one in lexicographical 
-order by the subnet IDs.
-For more information about the subnets for the LBC, see <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html">Application Load Balancers</a> 
-and <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/network-load-balancers.html">Network Load Balancers</a>.
-If you used <code>eksctl</code> or an Amazon EKS AWS CloudFormation template to create your VPC after March 26, 2020, then the subnets are tagged appropriately when they're created. For 
-more information about the Amazon EKS AWS CloudFormation VPC templates, see <a href="https://docs.aws.amazon.com/eks/latest/userguide/create-public-private-vpc.html">Creating a VPC for your Amazon EKS cluster</a>.</p>
-<h2 id="public-subnets">Public subnets<a class="headerlink" href="#public-subnets" title="Permanent link">&para;</a></h2>
-<p>Public subnets are used for internet-facing load balancers. These subnets must have the following tags:</p>
+<h1 id="subnet-auto-discovery">Subnet Auto-Discovery<a class="headerlink" href="#subnet-auto-discovery" title="Permanent link">&para;</a></h1>
+<p>The AWS Load Balancer Controller (LBC) automatically discovers subnets for creating AWS Network Load Balancers (NLB) and AWS Application Load Balancers (ALB). This auto-discovery process follows three main steps:</p>
+<ol>
+<li><strong>Candidate Subnet Determination</strong>: The controller identifies potential candidate subnets</li>
+<li><strong>Subnet Filtering</strong>: The controller filters these candidates based on eligibility criteria</li>
+<li><strong>Final Selection</strong>: The controller selects one subnet per availability zone</li>
+</ol>
+<h2 id="candidate-subnet-determination">Candidate Subnet Determination<a class="headerlink" href="#candidate-subnet-determination" title="Permanent link">&para;</a></h2>
+<p>The controller determines candidate subnets using the following process:</p>
+<ol>
+<li>
+<p><strong>If tag filters are specified</strong>: Only subnets matching these filters become candidates</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can only specify subnet tag filters for Ingress via IngressClassParams</p>
+</div>
+</li>
+<li>
+<p><strong>If no tag filters are specified</strong>:</p>
+<ul>
+<li>If subnets with matching <a href="#subnet-role-tag">role tag</a> exists: Only these become candidates</li>
+<li>[<strong>For LBC version &gt;= 2.12.1</strong>] If no subnets have role tags: Candidates are subnets whose <a href="#subnet-reachability">reachability</a> (public/private) matches the LoadBalancer's schema</li>
+</ul>
+</li>
+</ol>
+<h3 id="subnet-role-tag">Subnet Role Tag<a class="headerlink" href="#subnet-role-tag" title="Permanent link">&para;</a></h3>
+<p>Subnets can be tagged appropriately for auto-discovery selection:</p>
+<ul>
+<li>
+<p><strong>For internet-facing load balancers</strong>, the controller looks for public subnets with following tags:</p>
 <table>
 <thead>
 <tr>
@@ -1507,8 +1658,9 @@ more information about the Amazon EKS AWS CloudFormation VPC templates, see <a h
 </tr>
 </tbody>
 </table>
-<h2 id="private-subnets">Private subnets<a class="headerlink" href="#private-subnets" title="Permanent link">&para;</a></h2>
-<p>Private subnets are used for internal load balancers. These subnets must have the following tags:</p>
+</li>
+<li>
+<p><strong>For internal load balancers</strong>, the controller looks for private subnets with following tags:</p>
 <table>
 <thead>
 <tr>
@@ -1523,8 +1675,19 @@ more information about the Amazon EKS AWS CloudFormation VPC templates, see <a h
 </tr>
 </tbody>
 </table>
-<h2 id="common-tag">Common tag<a class="headerlink" href="#common-tag" title="Permanent link">&para;</a></h2>
-<p>In version v2.1.1 and older of the LBC, both the public and private subnets must be tagged with the cluster name as follows:</p>
+</li>
+</ul>
+<h3 id="subnet-reachability">Subnet reachability<a class="headerlink" href="#subnet-reachability" title="Permanent link">&para;</a></h3>
+<p>The controller automatically discovers all subnets in your VPC and determines whether each is a public or private subnet based on its associated route table configuration.
+A subnet is classified as public if its route table contains a route to an Internet Gateway.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can disable this behavior via SubnetDiscoveryByReachability feature flag.</p>
+</div>
+<h2 id="subnet-filtering">Subnet Filtering<a class="headerlink" href="#subnet-filtering" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Cluster Tag Check</strong>: The controller checks for cluster tags on subnets. Subnets with ineligible cluster tags will be filtered out.</p>
 <table>
 <thead>
 <tr>
@@ -1539,9 +1702,35 @@ more information about the Amazon EKS AWS CloudFormation VPC templates, see <a h
 </tr>
 </tbody>
 </table>
-<p><code>${cluster-name}</code> is the name of the Kubernetes cluster.</p>
-<p>The cluster tag is not required in versions v2.1.2 to v2.4.1, unless a cluster tag for another cluster is present.</p>
-<p>With versions v2.4.2 and later, you can disable the cluster tag check completely by specifying the feature gate <code>SubnetsClusterTagCheck=false</code></p>
+<ul>
+<li>If such cluster tag exists but no <code>&lt;clusterName&gt;</code> matches the current cluster, those subnets will be filtered out.</li>
+<li>[<strong>For LBC version &lt; 2.1.1</strong>] subnets without a cluster tag matching cluster name will be filtered out.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>You can disable this behavior via the <code>SubnetsClusterTagCheck</code> feature flag. When disabled, no cluster tag check will be performed against subnets.</p>
+</div>
+</li>
+<li>
+<p><strong>IP Address Availability</strong>: Subnets with insufficient available IP addresses(<strong>&lt;8</strong>) are filtered out.</p>
+</li>
+</ol>
+<h2 id="final-selection">Final Selection<a class="headerlink" href="#final-selection" title="Permanent link">&para;</a></h2>
+<p>The controller selects one subnet per availability zone. When multiple subnets exist per Availability Zone, the following priority order applies:</p>
+<ol>
+<li>Subnets with cluster tag for the current cluster (<code>kubernetes.io/cluster/&lt;clusterName&gt;</code>) are prioritized</li>
+<li>Subnets with lower lexicographical order of subnet ID are prioritized</li>
+</ol>
+<h2 id="minimum-subnet-requirements">Minimum Subnet Requirements<a class="headerlink" href="#minimum-subnet-requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>ALBs</strong>: Require at least two subnets across different Availability Zones by default</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>For customers allowlisted by the AWS Elastic Load Balancing team, you can enable the <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/configurations/#feature-gates">ALBSingleSubnet feature gate</a>. This allows provisioning an ALB with just one subnet instead of the standard requirement of two subnets.</p>
+</div>
+</li>
+</ul>
 
 
 

@@ -864,6 +864,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#enable-frontend-nlb" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enable frontend NLB
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1359,6 +1368,73 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Metrics
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            Metrics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../metrics/prometheus/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Prometheus
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1624,6 +1700,15 @@
   <a href="#addons" class="md-nav__link">
     <span class="md-ellipsis">
       Addons
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enable-frontend-nlb" class="md-nav__link">
+    <span class="md-ellipsis">
+      Enable frontend NLB
     </span>
   </a>
   
@@ -2007,6 +2092,97 @@
 <td>N/A</td>
 <td>Ingress</td>
 <td>Exclusive</td>
+</tr>
+<tr>
+<td><a href="#enable-frontend-nlb">alb.ingress.kubernetes.io/enable-frontend-nlb</a></td>
+<td>boolean</td>
+<td>false</td>
+<td>Ingress</td>
+<td>Exclusive</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-scheme">alb.ingress.kubernetes.io/frontend-nlb-scheme</a></td>
+<td>internal | internet-facing</td>
+<td>internal</td>
+<td>Ingress</td>
+<td>Exclusive</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-subnets">alb.ingress.kubernetes.io/frontend-nlb-subnets</a></td>
+<td>stringList</td>
+<td>N/A</td>
+<td>Ingress</td>
+<td>Exclusive</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-security-groups">alb.ingress.kubernetes.io/frontend-nlb-security-groups</a></td>
+<td>stringList</td>
+<td>N/A</td>
+<td>Ingress</td>
+<td>Exclusive</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-listener-port-mapping">alb.ingress.kubernetes.io/frontend-nlb-listener-port-mapping</a></td>
+<td>stringMap</td>
+<td>N/A</td>
+<td>Ingress</td>
+<td>Merge</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-port">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-port</a></td>
+<td>integer | traffic-port</td>
+<td>traffic-port</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-protocol">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-protocol</a></td>
+<td>HTTP | HTTPS</td>
+<td>HTTP</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-path">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-path</a></td>
+<td>string</td>
+<td>/</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-interval-seconds">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-interval-seconds</a></td>
+<td>integer</td>
+<td>15</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-timeout-seconds">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-timeout-seconds</a></td>
+<td>integer</td>
+<td>5</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-healthy-threshold-count">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-healthy-threshold-count</a></td>
+<td>integer</td>
+<td>3</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-unhealthy-threshold-count">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-unhealthy-threshold-count</a></td>
+<td>integer</td>
+<td>3</td>
+<td>Ingress</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><a href="#frontend-nlb-healthcheck-success-codes">alb.ingress.kubernetes.io/frontend-nlb-healthcheck-success-codes</a></td>
+<td>string</td>
+<td>200</td>
+<td>Ingress</td>
+<td>N/A</td>
 </tr>
 </tbody>
 </table>
@@ -2825,7 +3001,9 @@ Also, the securityGroups for Node/Pod will be modified to allow inbound traffic 
 <li>
 <p><a name="certificate-arn"><code>alb.ingress.kubernetes.io/certificate-arn</code></a> specifies the ARN of one or more certificate managed by <a href="https://aws.amazon.com/certificate-manager">AWS Certificate Manager</a></p>
 <div class="admonition tip">
-<p>The first certificate in the list will be added as default certificate. And remaining certificate will be added to the optional certificate list.
+<p>The first certificate in the list will be added as the default certificate.
+The remaining certificates will be added to the optional SNI certificate list.
+If the same certificate as the default certificate is also listed again (either explicitly in the list or via annotations from other IngressGroup members), it will still be added to the SNI list as well.
 See <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html#https-listener-certificates">SSL Certificates</a> for more details.</p>
 </div>
 <div class="admonition tip">
@@ -3091,6 +3269,166 @@ To disable shield protection, explicitly set the annotation value to 'false'.</p
     <code>alb.ingress.kubernetes.io/shield-advanced-protection: 'true'</code></li>
 <li>disable shield protection
     <code>alb.ingress.kubernetes.io/shield-advanced-protection: 'false'</code></li>
+</ul>
+</div>
+</li>
+</ul>
+<h2 id="enable-frontend-nlb">Enable frontend NLB<a class="headerlink" href="#enable-frontend-nlb" title="Permanent link">&para;</a></h2>
+<p>When this option is set to true, the controller will automatically provision a Network Load Balancer and register the Application Load Balancer as its target. Additional annotations are available to customize the NLB configurations, including options for scheme, security groups, subnets, and health check. The ingress resource will have two status entries, one for the NLB DNS and one for the ALB DNS. This allows users to combine the benefits of NLB and ALB into a single solution, leveraging NLB features like static IP address and PrivateLink, while retaining the rich routing capabilities of ALB.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<ul>
+<li>If you need to change the ALB <a href="#scheme">scheme</a>, make sure to disable this feature first. Changing the scheme will create a new ALB, which could interfere with the current configuration.</li>
+<li>If you create ingress and enable the feature at once, provisioning the NLB and registering the ALB as target can take up to 3-4 mins to complete.</li>
+</ul>
+</div>
+<ul>
+<li>
+<p><a name="enable-frontend-nlb"><code>alb.ingress.kubernetes.io/enable-frontend-nlb</code></a> enables frontend Network Load Balancer functionality. </p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Enable frontend nlb
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/enable-frontend-nlb: &quot;true&quot;
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-scheme"><code>alb.ingress.kubernetes.io/frontend-nlb-scheme</code></a> specifies the scheme for the Network Load Balancer.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set NLB scheme to internet-facing
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-scheme: internet-facing
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-subnets"><code>alb.ingress.kubernetes.io/frontend-nlb-subnets</code></a> specifies the subnets for the Network Load Balancer.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Specify subnets for NLB
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-subnets: subnet-xxxx1,subnet-xxxx2
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-security-groups"><code>alb.ingress.kubernetes.io/frontend-nlb-security-groups</code></a> specifies the security groups for the Network Load Balancer.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Specify security groups for NLB
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-security-groups: sg-xxxx1,sg-xxxx2
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-listener-port-mapping"><code>alb.ingress.kubernetes.io/frontend-nlb-listener-port-mapping</code></a> specifies the port mapping configuration for the Network Load Balancer listeners.</p>
+<div class="admonition note">
+<p class="admonition-title">Default</p>
+<ul>
+<li>The port defaults to match the ALB listener port, based on whether <code>alb.ingress.kubernetes.io/listen-ports</code>(#listen-ports) is specified.</li>
+</ul>
+</div>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Forward TCP traffic from NLB:80 to ALB:443
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-listener-port-mapping: 80=443
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-port"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-port</code></a> specifies the port used for health checks.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set health check port
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-port: traffic-port
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-protocol"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-protocol</code></a> specifies the protocol used for health checks.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set health check protocol
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-protocol: HTTP
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-path"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-path</code></a> specifies the destination path for health checks.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set health check path
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-path: /health
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-interval-seconds"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-interval-seconds</code></a> specifies the interval between consecutive health checks.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set health check interval
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-interval-seconds: &#39;15&#39;
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-timeout-seconds"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-timeout-seconds</code></a> specifies the target group health check timeout.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set health check timeout
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-timeout-seconds: &#39;5&#39;
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-healthy-threshold-count"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-healthy-threshold-count</code></a> specifies the consecutive health check successes required before a target is considered healthy.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set healthy threshold count
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-healthy-threshold-count: &#39;3&#39;
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-unhealthy-threshold-count"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-unhealthy-threshold-count</code></a> specifies the consecutive health check failures before a target gets marked unhealthy.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set unhealthy threshold count
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-unhealthy-threshold-count: &#39;3&#39;
+</code></pre></div></li>
+</ul>
+</div>
+</li>
+<li>
+<p><a name="frontend-nlb-healthcheck-success-codes"><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-success-codes</code></a> specifies the HTTP codes that indicate a successful health check.</p>
+<div class="admonition example">
+<p class="admonition-title">Example</p>
+<ul>
+<li>Set success codes for health check
+    <div class="highlight"><pre><span></span><code>alb.ingress.kubernetes.io/frontend-nlb-healthcheck-success-codes: &#39;200&#39;
+</code></pre></div></li>
 </ul>
 </div>
 </li>

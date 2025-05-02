@@ -1376,6 +1376,73 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Metrics
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            Metrics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/metrics/prometheus/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Prometheus
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1686,7 +1753,7 @@
 
 
 <h1 id="controller-configuration-options">Controller configuration options<a class="headerlink" href="#controller-configuration-options" title="Permanent link">&para;</a></h1>
-<p>This document covers configuration of the AWS Load Balancer controller</p>
+<p>This document primarily covers the runtime configuration options for the AWS Load Balancer Controller. For installation-specific configuration options, see the <a href="https://github.com/aws/eks-charts/tree/master/stable/aws-load-balancer-controller#configuration">Helm chart values documentation</a>.</p>
 <div class="admonition warning">
 <p class="admonition-title">limitation</p>
 <p>The v2.0.0+ version of AWSLoadBalancerController currently only support one controller deployment(with one or multiple replicas) per cluster.</p>
@@ -1849,6 +1916,12 @@ provisioning ALB resources. There are many ways to achieve this, such as loading
 <td>boolean</td>
 <td>true</td>
 <td>Enable sharing of security groups for backend traffic</td>
+</tr>
+<tr>
+<td>enable-manage-backend-security-group-rules</td>
+<td>boolean</td>
+<td>false</td>
+<td>Enable managing backend security group rules by controller</td>
 </tr>
 <tr>
 <td>enable-endpoint-slices</td>
@@ -2149,6 +2222,12 @@ Client side throttling enables gradual scaling of the api calls. Additional thro
 <td>string</td>
 <td>true</td>
 <td>Enable or disable the capacity reservation feature on ALB and NLB</td>
+</tr>
+<tr>
+<td>EnableTCPUDPListenerType</td>
+<td>string</td>
+<td>false</td>
+<td>Enable or disable creation of TCP_UDP type listeners. This value can be overriden at the Service level by  the annotation <code>service.beta.kubernetes.io/aws-load-balancer-enable-tcp-udp-listener</code></td>
 </tr>
 </tbody>
 </table>

@@ -933,6 +933,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#spectargettype" class="md-nav__link">
+    <span class="md-ellipsis">
+      spec.targetType
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#specloadbalancerattributes" class="md-nav__link">
     <span class="md-ellipsis">
       spec.loadBalancerAttributes
@@ -969,6 +978,15 @@
   <a href="#specipv4ipampoolid" class="md-nav__link">
     <span class="md-ellipsis">
       spec.ipv4IPAMPoolId
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specprefixlistids" class="md-nav__link">
+    <span class="md-ellipsis">
+      spec.prefixListIDs
     </span>
   </a>
   
@@ -1437,6 +1455,73 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Metrics
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            Metrics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../metrics/prometheus/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Prometheus
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1734,6 +1819,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#spectargettype" class="md-nav__link">
+    <span class="md-ellipsis">
+      spec.targetType
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#specloadbalancerattributes" class="md-nav__link">
     <span class="md-ellipsis">
       spec.loadBalancerAttributes
@@ -1770,6 +1864,15 @@
   <a href="#specipv4ipampoolid" class="md-nav__link">
     <span class="md-ellipsis">
       spec.ipv4IPAMPoolId
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#specprefixlistids" class="md-nav__link">
+    <span class="md-ellipsis">
+      spec.prefixListIDs
     </span>
   </a>
   
@@ -1945,6 +2048,14 @@ spec:
   minimumLoadBalancerCapacity:
     capacityUnits: 1000
 </code></pre></div></li>
+<li>with targetType
+<div class="highlight"><pre><span></span><code>apiVersion: elbv2.k8s.aws/v1beta1
+kind: IngressClassParams
+metadata:
+  name: class2048-config
+spec:
+  targetType: ip
+</code></pre></div></li>
 </ul>
 </div>
 <h3 id="ingressclassparams-specification">IngressClassParams specification<a class="headerlink" href="#ingressclassparams-specification" title="Permanent link">&para;</a></h3>
@@ -2009,6 +2120,10 @@ each listed tag key is present and has one of the corresponding tag values.</p>
 </ol>
 </li>
 </ol>
+<h4 id="spectargettype">spec.targetType<a class="headerlink" href="#spectargettype" title="Permanent link">&para;</a></h4>
+<p><code>targetType</code> is an optional setting. The available options are <code>instance</code> or <code>ip</code>.</p>
+<p>This defines the target type of target groups for all Ingresses that belong to IngressClass with this IngressClassParams.
+If the field is specified, LBC will ignore the <code>alb.ingress.kubernetes.io/target-type</code> annotation.</p>
 <h4 id="specloadbalancerattributes">spec.loadBalancerAttributes<a class="headerlink" href="#specloadbalancerattributes" title="Permanent link">&para;</a></h4>
 <p><code>loadBalancerAttributes</code> is an optional setting.</p>
 <p>Cluster administrators can use <code>loadBalancerAttributes</code> field to specify the <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#load-balancer-attributes">Load Balancer Attributes</a> that should be applied to the load balancers that belong to this IngressClass. You can specify the list of load balancer attribute name and the desired value in the <code>spec.loadBalancerAttributes</code> field.</p>
@@ -2025,6 +2140,13 @@ They may specify <code>capacityUnits</code>. If the field is specified, LBC will
 <p>The IPAM pool you choose will be the preferred source of public IPv4 addresses.
 If the pool is depleted, IPv4 addresses will be assigned by AWS.
 To remove the IPAM pool from your ALB, remove <code>spec.ipv4IPAMPoolId</code> from the IngressClass definition.</p>
+<h4 id="specprefixlistids">spec.prefixListIDs<a class="headerlink" href="#specprefixlistids" title="Permanent link">&para;</a></h4>
+<p><code>prefixListIDs</code> is an optional setting.</p>
+<p>Cluster administrators can use <code>prefixListIDs</code> field to specify the managed prefix lists that are allowed to access the load balancers that belong to this IngressClass. You can specify the list of prefix list IDs in the <code>spec.prefixListIDs</code> field.</p>
+<ol>
+<li>If <code>prefixListIDs</code> is set, the prefix lists defined will be applied to the load balancer that belong to this IngressClass. If you specify invalid prefix list IDs, the controller will fail to reconcile ingresses belonging to the particular ingress class.</li>
+<li>If <code>prefixListIDs</code> un-specified, Ingresses with this IngressClass can continue to use <code>alb.ingress.kubernetes.io/security-group-prefix-lists</code> annotation to specify the load balancer prefix lists.</li>
+</ol>
 
 
 

@@ -1355,6 +1355,73 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Metrics
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            Metrics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../metrics/prometheus/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Prometheus
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1721,6 +1788,12 @@ documentation is not an accurate reference for the services reconciled by the in
 <td>Set to <code>"*"</code> to enable</td>
 </tr>
 <tr>
+<td><a href="#proxy-protocol-v2">service.beta.kubernetes.io/aws-load-balancer-proxy-protocol-per-target-group</a></td>
+<td>string</td>
+<td></td>
+<td>If specified,configures proxy protocol for the target groups corresponding to the ports mentioned and disables for the rest. For example, if you have services deployed on ports <code>"80, 443 and 22"</code>, the annotation value <code>"80, 443"</code> will enable proxy protocol for ports 80 and 443 only, and disable for port 22. This annotation is overriden by <code>"service.beta.kubernetes.io/aws-load-balancer-proxy-protocol"</code></td>
+</tr>
+<tr>
 <td><a href="#ip-address-type">service.beta.kubernetes.io/aws-load-balancer-ip-address-type</a></td>
 <td>string</td>
 <td>ipv4</td>
@@ -1929,6 +2002,12 @@ documentation is not an accurate reference for the services reconciled by the in
 <td>string</td>
 <td></td>
 <td>If specified, a security group rule is added to the managed security group to allow explicit ICMP traffic for <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/network_mtu.html#path_mtu_discovery">Path MTU discovery</a> for IPv4 and dual-stack VPCs. Creates a rule for each source range if <code>service.beta.kubernetes.io/load-balancer-source-ranges</code> is present.</td>
+</tr>
+<tr>
+<td><a href="#tcp-udp-listener">service.beta.kubernetes.io/aws-load-balancer-enable-tcp-udp-listener</a></td>
+<td>boolean</td>
+<td>false</td>
+<td>If specified, the controller will attempt to try TCP_UDP Listeners when the service defines a TCP and UDP port on the same port number.</td>
 </tr>
 </tbody>
 </table>
@@ -2260,6 +2339,17 @@ Custom attributes set in this annotation's config map will be overriden by annot
 </div>
 </li>
 <li>
+<p><a name="tcp-udp-listener"><code>service.beta.kubernetes.io/aws-load-balancer-enable-tcp-udp-listener</code></a> allows creation of <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-listeners.html#listener-configuration">TCP_UDP</a> listener type when the service defines a TCP and UDP port on the same port number.</p>
+</li>
+</ul>
+<p>!!!note ""
+  - To change the default from false to true, use the controller flag <code>--feature-gates=EnableTCPUDPListener=true</code> to allow creation of TCP_UDP listeners for all services.
+  !!!example
+  - Allow for the creation of TCP_UDP listeners for a service.
+  <div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-enable-tcp-udp-listener: &quot;true&quot;
+</code></pre></div></p>
+<ul>
+<li>
 <p><a name="deprecated-attributes"></a>the following annotations are deprecated in v2.3.0 release in favor of <a href="#load-balancer-attributes">service.beta.kubernetes.io/aws-load-balancer-attributes</a></p>
 <div class="admonition note">
 <div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-access-log-enabled
@@ -2389,10 +2479,6 @@ Target Groups shared with multiple clusters, it's recommended to use an out-of-b
 </li>
 <li>
 <p><a name="healthcheck-timeout"><code>service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout</code></a> specifies the target group health check timeout. The target has to respond within the timeout for a successful health check.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The controller currently ignores the timeout configuration due to the limitations on the AWS NLB. The default timeout for TCP is 10s and HTTP is 6s.</p>
-</div>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
 <div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: &quot;10&quot;
@@ -2411,8 +2497,14 @@ See <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/cre
 </div>
 <div class="admonition example">
 <p class="admonition-title">Example</p>
-<div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-2:xxxxx:certificate/xxxxxxx
-</code></pre></div>
+<ul>
+<li>single certificate
+    <div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-2:xxxxx:certificate/xxxxxxx
+</code></pre></div></li>
+<li>multiple certificates
+    <div class="highlight"><pre><span></span><code>service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-2:xxxxx:certificate/cert1,arn:aws:acm:us-west-2:xxxxx:certificate/cert2,arn:aws:acm:us-west-2:xxxxx:certificate/cert3
+</code></pre></div></li>
+</ul>
 </div>
 </li>
 <li>
