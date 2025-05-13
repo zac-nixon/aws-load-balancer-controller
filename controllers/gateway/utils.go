@@ -67,6 +67,31 @@ func updateGatewayClassAcceptedCondition(ctx context.Context, k8sClient client.C
 	return nil
 }
 
+func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string, newStatus metav1.ConditionStatus, reason string, message string) bool {
+
+	indxToUpdate := -1
+	var derivedCondition metav1.Condition
+	for i, condition := range gw.Status.Conditions {
+		if condition.Type == targetConditionType {
+			indxToUpdate = i
+			derivedCondition = condition
+			break
+		}
+	}
+
+	if indxToUpdate != -1 {
+		if derivedCondition.Status != newStatus || derivedCondition.Message != message || derivedCondition.Reason != reason {
+			gw.Status.Conditions[indxToUpdate].LastTransitionTime = metav1.NewTime(time.Now())
+			gw.Status.Conditions[indxToUpdate].ObservedGeneration = gw.Generation
+			gw.Status.Conditions[indxToUpdate].Status = newStatus
+			gw.Status.Conditions[indxToUpdate].Message = message
+			gw.Status.Conditions[indxToUpdate].Reason = reason
+			return true
+		}
+	}
+	return false
+}
+
 func deriveGatewayClassAcceptedStatus(gwClass *gwv1.GatewayClass) (metav1.ConditionStatus, int) {
 	for i, v := range gwClass.Status.Conditions {
 		if v.Type == string(gwv1.GatewayClassReasonAccepted) {

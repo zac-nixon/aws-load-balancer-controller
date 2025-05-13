@@ -291,6 +291,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 	http1 := elbv2model.ProtocolVersionHTTP1
 	testCases := []struct {
 		name                     string
+		gw                       *gwv1.Gateway
 		tags                     map[string]string
 		lbType                   elbv2model.LoadBalancerType
 		disableRestrictedSGRules bool
@@ -613,7 +614,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 
 			builder := newTargetGroupBuilder("my-cluster", "vpc-xxx", tagger, tc.lbType, tc.disableRestrictedSGRules, tc.defaultTargetType)
 
-			out := builder.buildTargetGroupBindingSpec(nil, tc.expectedTgSpec, nil, tc.backend, nil)
+			out := builder.buildTargetGroupBindingSpec(tc.gw, nil, tc.expectedTgSpec, nil, tc.backend, nil)
 
 			assert.Equal(t, tc.expectedTgBindingSpec, out)
 		})

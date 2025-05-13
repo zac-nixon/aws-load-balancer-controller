@@ -6,6 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
@@ -78,6 +79,7 @@ func newGatewayReconciler(controllerName string, lbType elbv2model.LoadBalancerT
 		metricsCollector:        metricsCollector,
 		reconcileTracker:        reconcileTracker,
 		cfgResolver:             cfgResolver,
+		gatewayConditionUpdater: prepareGatewayConditionUpdate,
 	}
 }
 
@@ -99,6 +101,7 @@ type gatewayReconciler struct {
 	logger                  logr.Logger
 	metricsCollector        lbcmetrics.MetricCollector
 	reconcileTracker        func(namespaceName types.NamespacedName)
+	gatewayConditionUpdater func(gw *gwv1.Gateway, targetConditionType string, newStatus metav1.ConditionStatus, reason string, message string) bool
 
 	cfgResolver gatewayConfigResolver
 }
@@ -250,13 +253,19 @@ func (r *gatewayReconciler) reconcileUpdate(ctx context.Context, gw *gwv1.Gatewa
 		return err
 	}
 
+	lbARN, err := lb.LoadBalancerARN().Resolve(ctx)
+	if err != nil {
+		r.logger.Error(err, "Unable to resolve LB ARN due to error")
+		lbARN = ""
+	}
+
 	if !backendSGRequired {
 		if err := r.backendSGProvider.Release(ctx, networking.ResourceTypeService, []types.NamespacedName{k8s.NamespacedName(gw)}); err != nil {
 			return err
 		}
 	}
 
-	if err = r.updateGatewayStatus(ctx, lbDNS, gw); err != nil {
+	if err = r.updateGatewayStatus(ctx, lbDNS, lbARN, gw); err != nil {
 		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedUpdateStatus, fmt.Sprintf("Failed update status due to %v", err))
 		return err
 	}
@@ -292,14 +301,16 @@ func (r *gatewayReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, cf
 	return stack, lb, backendSGRequired, nil
 }
 
-func (r *gatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS string, gw *gwv1.Gateway) error {
+func (r *gatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS string, lbARN string, gw *gwv1.Gateway) error {
 	// TODO Consider LB ARN.
 
+	gwOld := gw.DeepCopy()
+
+	needPatch := prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionAccepted), metav1.ConditionTrue, string(gwv1.GatewayConditionAccepted), "")
 	// Gateway Address Status
 	if len(gw.Status.Addresses) != 1 ||
 		gw.Status.Addresses[0].Value != "" ||
 		gw.Status.Addresses[0].Value != lbDNS {
-		gwOld := gw.DeepCopy()
 		ipAddressType := gwv1.HostnameAddressType
 		gw.Status.Addresses = []gwv1.GatewayStatusAddress{
 			{
@@ -307,13 +318,18 @@ func (r *gatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS strin
 				Value: lbDNS,
 			},
 		}
+		needPatch = true
+	}
+
+	if lbDNS != "" {
+		needPatch = needPatch || prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionProgrammed), metav1.ConditionTrue, string(gwv1.GatewayConditionProgrammed), lbARN)
+	}
+
+	if needPatch {
 		if err := r.k8sClient.Status().Patch(ctx, gw, client.MergeFrom(gwOld)); err != nil {
 			return errors.Wrapf(err, "failed to update gw status: %v", k8s.NamespacedName(gw))
 		}
 	}
-
-	// TODO: Listener status ListenerStatus
-	// https://github.com/aws/aws-application-networking-k8s/blob/main/pkg/controllers/gateway_controller.go#L350
 
 	return nil
 }

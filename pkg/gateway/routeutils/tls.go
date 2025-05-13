@@ -73,7 +73,6 @@ func (tlsRoute *tlsRouteDescription) loadAttachedRules(ctx context.Context, k8sC
 
 		convertedRules = append(convertedRules, convertTLSRouteRule(&rule, convertedBackends))
 	}
-
 	tlsRoute.rules = convertedRules
 	return tlsRoute, nil
 }
