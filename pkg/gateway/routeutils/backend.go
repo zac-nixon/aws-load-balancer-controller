@@ -27,11 +27,12 @@ type Backend struct {
 }
 
 // commonBackendLoader this function will load the services and target group configurations associated with this gateway backend.
-func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error) {
+func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError) {
 
 	// We only support references of type service.
 	if backendRef.Kind != nil && *backendRef.Kind != "Service" {
-		return nil, nil
+		initialErrorMessage := "Backend Ref must be on kind 'Service'"
+		return nil, wrapError(errors.Errorf("%s", generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)), gwv1.GatewayReasonListenersNotValid)
 	}
 
 	if backendRef.Weight != nil && *backendRef.Weight == 0 {
@@ -39,7 +40,8 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpeci
 	}
 
 	if backendRef.Port == nil {
-		return nil, errors.Errorf("Missing port in backend reference")
+		initialErrorMessage := "Port is required"
+		return nil, wrapError(errors.Errorf("%s", generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)), gwv1.GatewayReasonListenersNotValid)
 	}
 
 	var svcNamespace string
@@ -58,7 +60,8 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpeci
 	if svcNamespace != routeIdentifier.Namespace {
 		allowed, err := referenceGrantCheck(ctx, k8sClient, svcIdentifier, routeIdentifier, routeKind)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Unable to perform reference grant check")
+			// Currently, this API only fails for a k8s related error message, hence no status update.
+			return nil, wrapErrorNoStatusUpdate(errors.Wrapf(err, "Unable to perform reference grant check"))
 		}
 
 		// We should not give any hints about the existence of this resource, therefore, we return nil.
@@ -72,7 +75,16 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpeci
 	svc := &corev1.Service{}
 	err := k8sClient.Get(ctx, svcIdentifier, svc)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("Unable to fetch svc object %+v", svcIdentifier))
+
+		convertToNotFoundError := client.IgnoreNotFound(err)
+
+		if convertToNotFoundError == nil {
+			// Svc not found, post an updated status.
+			initialErrorMessage := fmt.Sprintf("Service (%s:%s) not found)", svcIdentifier.Namespace, svcIdentifier.Name)
+			return nil, wrapError(errors.Errorf("%s", generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)), gwv1.GatewayReasonListenersNotValid)
+		}
+		// Otherwise, general error. No need for status update.
+		return nil, wrapErrorNoStatusUpdate(errors.Wrap(err, fmt.Sprintf("Unable to fetch svc object %+v", svcIdentifier)))
 	}
 
 	var servicePort *corev1.ServicePort
@@ -87,11 +99,13 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpeci
 	tgConfig, err := lookUpTargetGroupConfiguration(ctx, k8sClient, k8s.NamespacedName(svc))
 
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("Unable to fetch tg config object"))
+		// As of right now, this error can only be thrown because of a k8s api error hence no status update.
+		return nil, wrapErrorNoStatusUpdate(errors.Wrap(err, fmt.Sprintf("Unable to fetch tg config object")))
 	}
 
 	if servicePort == nil {
-		return nil, errors.Errorf("Unable to find service port for port %d", *backendRef.Port)
+		initialErrorMessage := fmt.Sprintf("Unable to find service port for port %d", *backendRef.Port)
+		return nil, wrapError(errors.Errorf("%s", generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)), gwv1.GatewayReasonListenersNotValid)
 	}
 
 	// Weight specifies the proportion of requests forwarded to the referenced

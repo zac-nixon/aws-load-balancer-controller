@@ -47,10 +47,10 @@ func (t *convertedGRPCRouteRule) GetBackends() []Backend {
 type grpcRouteDescription struct {
 	route         *gwv1.GRPCRoute
 	rules         []RouteRule
-	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error)
+	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError)
 }
 
-func (grpcRoute *grpcRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, error) {
+func (grpcRoute *grpcRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError) {
 	convertedRules := make([]RouteRule, 0)
 	for _, rule := range grpcRoute.route.Spec.Rules {
 		convertedBackends := make([]Backend, 0)

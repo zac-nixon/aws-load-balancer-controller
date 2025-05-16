@@ -47,14 +47,14 @@ func (t *convertedHTTPRouteRule) GetBackends() []Backend {
 type httpRouteDescription struct {
 	route         *gwv1.HTTPRoute
 	rules         []RouteRule
-	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error)
+	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError)
 }
 
 func (httpRoute *httpRouteDescription) GetAttachedRules() []RouteRule {
 	return httpRoute.rules
 }
 
-func (httpRoute *httpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, error) {
+func (httpRoute *httpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError) {
 	convertedRules := make([]RouteRule, 0)
 	for _, rule := range httpRoute.route.Spec.Rules {
 		convertedBackends := make([]Backend, 0)

@@ -48,14 +48,14 @@ func (t *convertedUDPRouteRule) GetBackends() []Backend {
 type udpRouteDescription struct {
 	route         *gwalpha2.UDPRoute
 	rules         []RouteRule
-	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error)
+	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError)
 }
 
 func (udpRoute *udpRouteDescription) GetAttachedRules() []RouteRule {
 	return udpRoute.rules
 }
 
-func (udpRoute *udpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, error) {
+func (udpRoute *udpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError) {
 	convertedRules := make([]RouteRule, 0)
 	for _, rule := range udpRoute.route.Spec.Rules {
 		convertedBackends := make([]Backend, 0)

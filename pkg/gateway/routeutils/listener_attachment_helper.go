@@ -2,7 +2,9 @@ package routeutils
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -11,7 +13,7 @@ import (
 // listenerAttachmentHelper is an internal utility interface that can be used to determine if a listener will allow
 // a route to attach to it.
 type listenerAttachmentHelper interface {
-	listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, error)
+	listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, LoaderError)
 }
 
 var _ listenerAttachmentHelper = &listenerAttachmentHelperImpl{}
@@ -31,7 +33,7 @@ func newListenerAttachmentHelper(k8sClient client.Client, logger logr.Logger) li
 
 // listenerAllowsAttachment utility method to determine if a listener will allow a route to connect using
 // Gateway API rules to determine compatibility between lister and route.
-func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, error) {
+func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, LoaderError) {
 	// check namespace
 	namespaceOK, err := attachmentHelper.namespaceCheck(ctx, gw, listener, route)
 	if err != nil {
@@ -63,7 +65,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(c
 
 // namespaceCheck namespace check implements the Gateway API spec for namespace matching between listener
 // and route to determine compatibility.
-func (attachmentHelper *listenerAttachmentHelperImpl) namespaceCheck(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, error) {
+func (attachmentHelper *listenerAttachmentHelperImpl) namespaceCheck(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, LoaderError) {
 	var allowedNamespaces gwv1.FromNamespaces
 
 	if listener.AllowedRoutes == nil || listener.AllowedRoutes.Namespaces == nil || listener.AllowedRoutes.Namespaces.From == nil {
@@ -124,8 +126,8 @@ func (attachmentHelper *listenerAttachmentHelperImpl) kindCheck(listener gwv1.Li
 	return allowedRoutes.Has(route.GetRouteKind())
 }
 
-func (attachmentHelper *listenerAttachmentHelperImpl) hostnameCheck(listener gwv1.Listener, route preLoadRouteDescriptor) (bool, error) {
-	// A route can attach to listener if it does not have hostname or listener does not have hostname
+func (attachmentHelper *listenerAttachmentHelperImpl) hostnameCheck(listener gwv1.Listener, route preLoadRouteDescriptor) (bool, LoaderError) {
+	// A route can attach to listener if it does not have a hostname or listener does not have a hostname
 	if listener.Hostname == nil || len(route.GetHostnames()) == 0 {
 		return true, nil
 	}
@@ -134,8 +136,10 @@ func (attachmentHelper *listenerAttachmentHelperImpl) hostnameCheck(listener gwv
 	isListenerHostnameValid, err := IsHostNameInValidFormat(string(*listener.Hostname))
 	if err != nil {
 		attachmentHelper.logger.Error(err, "listener hostname is not valid", "listener", listener.Name, "hostname", *listener.Hostname)
-		return false, err
+		initialErrorMessage := fmt.Sprintf("listener hostname %s is not valid (listener name %s)", listener.Name, *listener.Hostname)
+		return false, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid)
 	}
+
 	if !isListenerHostnameValid {
 		return false, nil
 	}

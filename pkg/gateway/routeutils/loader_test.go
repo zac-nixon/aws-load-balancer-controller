@@ -17,7 +17,7 @@ type mockMapper struct {
 	mapToReturn    map[int][]preLoadRouteDescriptor
 }
 
-func (m *mockMapper) mapGatewayAndRoutes(context context.Context, gw gwv1.Gateway, routes []preLoadRouteDescriptor) (map[int][]preLoadRouteDescriptor, error) {
+func (m *mockMapper) mapGatewayAndRoutes(context context.Context, gw gwv1.Gateway, routes []preLoadRouteDescriptor) (map[int][]preLoadRouteDescriptor, LoaderError) {
 	assert.ElementsMatch(m.t, m.expectedRoutes, routes)
 	return m.mapToReturn, nil
 }
@@ -29,7 +29,7 @@ type mockRoute struct {
 	routeKind      RouteKind
 }
 
-func (m *mockRoute) loadAttachedRules(context context.Context, k8sClient client.Client) (RouteDescriptor, error) {
+func (m *mockRoute) loadAttachedRules(context context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError) {
 	return m, nil
 }
 

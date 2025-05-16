@@ -24,7 +24,7 @@ type routeMetadataDescriptor interface {
 // loadAttachedRules() to generate a full route description.
 type preLoadRouteDescriptor interface {
 	routeMetadataDescriptor
-	loadAttachedRules(context context.Context, k8sClient client.Client) (RouteDescriptor, error)
+	loadAttachedRules(context context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError)
 }
 
 // RouteDescriptor is a type agnostic representation of a Gateway Route.

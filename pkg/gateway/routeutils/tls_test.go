@@ -123,7 +123,7 @@ func Test_ListTLSRoutes(t *testing.T) {
 
 func Test_TLS_LoadAttachedRules(t *testing.T) {
 	weight := 0
-	mockLoader := func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error) {
+	mockLoader := func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError) {
 		weight++
 		return &Backend{
 			Weight: weight,

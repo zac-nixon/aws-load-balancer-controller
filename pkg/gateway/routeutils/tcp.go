@@ -48,14 +48,14 @@ func (t *convertedTCPRouteRule) GetBackends() []Backend {
 type tcpRouteDescription struct {
 	route         *gwalpha2.TCPRoute
 	rules         []RouteRule
-	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error)
+	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, LoaderError)
 }
 
 func (tcpRoute *tcpRouteDescription) GetAttachedRules() []RouteRule {
 	return tcpRoute.rules
 }
 
-func (tcpRoute *tcpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, error) {
+func (tcpRoute *tcpRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, LoaderError) {
 
 	convertedRules := make([]RouteRule, 0)
 	for _, rule := range tcpRoute.route.Spec.Rules {

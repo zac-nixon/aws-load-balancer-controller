@@ -47,7 +47,7 @@ var L7RouteFilter LoadRouteFilter = &routeFilterImpl{
 // Loader will load all data Kubernetes that are pertinent to a gateway (Routes, Services, Target Group Configurations).
 // It will output the data using a map which maps listener port to the various routing rules for that port.
 type Loader interface {
-	LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter) (map[int32][]RouteDescriptor, error)
+	LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter) (map[int32][]RouteDescriptor, LoaderError)
 }
 
 var _ Loader = &loaderImpl{}
@@ -69,7 +69,7 @@ func NewLoader(k8sClient client.Client, logger logr.Logger) Loader {
 }
 
 // LoadRoutesForGateway loads all relevant data for a single Gateway.
-func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter) (map[int32][]RouteDescriptor, error) {
+func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter) (map[int32][]RouteDescriptor, LoaderError) {
 	// 1. Load all relevant routes according to the filter
 
 	loadedRoutes := make([]preLoadRouteDescriptor, 0)
@@ -79,7 +79,7 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 		if applicable {
 			data, err := loader(ctx, l.k8sClient)
 			if err != nil {
-				return nil, err
+				return nil, wrapErrorNoStatusUpdate(err)
 			}
 			loadedRoutes = append(loadedRoutes, data...)
 		}
@@ -97,7 +97,7 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 }
 
 // loadChildResources responsible for loading all resources that a route descriptor references.
-func (l *loaderImpl) loadChildResources(ctx context.Context, preloadedRoutes map[int][]preLoadRouteDescriptor) (map[int32][]RouteDescriptor, error) {
+func (l *loaderImpl) loadChildResources(ctx context.Context, preloadedRoutes map[int][]preLoadRouteDescriptor) (map[int32][]RouteDescriptor, LoaderError) {
 	// Cache to reduce duplicate route look ups.
 	// Kind -> [NamespacedName:Previously Loaded Descriptor]
 	resourceCache := make(map[string]RouteDescriptor)

@@ -13,10 +13,10 @@ import (
 
 type mockNamespaceSelector struct {
 	nss sets.Set[string]
-	err error
+	err LoaderError
 }
 
-func (mnss *mockNamespaceSelector) getNamespacesFromSelector(_ context.Context, _ *metav1.LabelSelector) (sets.Set[string], error) {
+func (mnss *mockNamespaceSelector) getNamespacesFromSelector(_ context.Context, _ *metav1.LabelSelector) (sets.Set[string], LoaderError) {
 	return mnss.nss, mnss.err
 }
 
@@ -92,7 +92,7 @@ func Test_namespaceCheck(t *testing.T) {
 	nsSelector := gwv1.NamespacesFromSelector
 	testCases := []struct {
 		namespaceSelectorResult sets.Set[string]
-		namespaceSelectorError  error
+		namespaceSelectorError  LoaderError
 		listener                gwv1.Listener
 		name                    string
 
@@ -101,7 +101,7 @@ func Test_namespaceCheck(t *testing.T) {
 	}{
 		{
 			name:                   "no listener.allowedroutes defaults to same namespace",
-			namespaceSelectorError: errors.New("this shouldnt get called"),
+			namespaceSelectorError: wrapErrorNoStatusUpdate(errors.New("this shouldnt get called")),
 			scenarios: []namespaceScenario{
 				{
 					scenarioName:   "same ns",
@@ -118,7 +118,7 @@ func Test_namespaceCheck(t *testing.T) {
 		},
 		{
 			name:                   "no listener.allowedroutes.namespaces defaults to same namespace",
-			namespaceSelectorError: errors.New("this shouldnt get called"),
+			namespaceSelectorError: wrapErrorNoStatusUpdate(errors.New("this shouldnt get called")),
 			scenarios: []namespaceScenario{
 				{
 					scenarioName:   "same ns",
@@ -135,7 +135,7 @@ func Test_namespaceCheck(t *testing.T) {
 		},
 		{
 			name:                   "no listener.allowedroutes.namespaces.from defaults to same namespace",
-			namespaceSelectorError: errors.New("this shouldnt get called"),
+			namespaceSelectorError: wrapErrorNoStatusUpdate(errors.New("this shouldnt get called")),
 			scenarios: []namespaceScenario{
 				{
 					scenarioName:   "same ns",
@@ -152,7 +152,7 @@ func Test_namespaceCheck(t *testing.T) {
 		},
 		{
 			name:                   "listener.allowedroutes.namespaces.from set to same",
-			namespaceSelectorError: errors.New("this shouldnt get called"),
+			namespaceSelectorError: wrapErrorNoStatusUpdate(errors.New("this shouldnt get called")),
 			scenarios: []namespaceScenario{
 				{
 					scenarioName:   "same ns",
@@ -176,7 +176,7 @@ func Test_namespaceCheck(t *testing.T) {
 		},
 		{
 			name:                   "listener.allowedroutes.namespaces.from set to all",
-			namespaceSelectorError: errors.New("this shouldnt get called"),
+			namespaceSelectorError: wrapErrorNoStatusUpdate(errors.New("this shouldnt get called")),
 			scenarios: []namespaceScenario{
 				{
 					scenarioName:   "same ns",
