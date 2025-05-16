@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	"time"
+)
+
+const (
+	requeueMessage          = "Monitoring provisioning state"
+	statusUpdateRequeueTime = 2 * time.Minute
 )
 
 var _ Reconciler = &gatewayReconciler{}
@@ -149,7 +156,7 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	r.reconcileTracker(req.NamespacedName)
 	err := r.reconcileHelper(ctx, req)
 	if err != nil {
-		r.logger.Error(err, "Got this error!")
+		r.logger.Error(err, "Got this error")
 	}
 	return runtime.HandleReconcileError(err, r.logger)
 }
@@ -199,7 +206,8 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	}
 
 	if lb == nil {
-		err = r.reconcileDelete(ctx, gw, allRoutes)
+		r.logger.Info("Processing delete")
+		err = r.reconcileDelete(ctx, gw, stack, allRoutes)
 		if err != nil {
 			r.logger.Error(err, "Failed to process gateway delete")
 		}
@@ -226,50 +234,59 @@ func (r *gatewayReconciler) resolveLoadBalancerConfig(ctx context.Context, k8sCl
 	return lbConf, err
 }
 
-func (r *gatewayReconciler) reconcileDelete(ctx context.Context, gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor) error {
+func (r *gatewayReconciler) reconcileDelete(ctx context.Context, gw *gwv1.Gateway, stack core.Stack, routes map[int32][]routeutils.RouteDescriptor) error {
 	for _, routeList := range routes {
 		if len(routeList) != 0 {
-			// TODO - Better error messaging (e.g. tell user the routes that are still attached)
-			return errors.New("Gateway still has routes attached")
+			err := errors.Errorf("Gateway deletion invoked with routes attached [%s]", generateRouteList(routes))
+			r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedDeleteWithRoutesAttached, err.Error())
+			return err
 		}
 	}
 
-	return r.finalizerManager.RemoveFinalizers(ctx, gw, r.finalizer)
+	if k8s.HasFinalizer(gw, r.finalizer) {
+		r.logger.Info("Before deploy")
+		err := r.deployModel(ctx, gw, stack)
+		r.logger.Info("After deploy")
+		if err != nil {
+			return err
+		}
+		r.logger.Info("Before release")
+		if err := r.backendSGProvider.Release(ctx, networking.ResourceTypeGateway, []types.NamespacedName{k8s.NamespacedName(gw)}); err != nil {
+			return err
+		}
+		r.logger.Info("After release")
+		if err := r.finalizerManager.RemoveFinalizers(ctx, gw, r.finalizer); err != nil {
+			r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedAddFinalizer, fmt.Sprintf("Failed remove finalizer due to %v", err))
+			return err
+		}
+		r.logger.Info("After remove finalizer")
+	}
+	return nil
 }
 
 func (r *gatewayReconciler) reconcileUpdate(ctx context.Context, gw *gwv1.Gateway, stack core.Stack,
 	lb *elbv2model.LoadBalancer, backendSGRequired bool) error {
 
 	if err := r.finalizerManager.AddFinalizers(ctx, gw, r.finalizer); err != nil {
-		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedAddFinalizer, fmt.Sprintf("Failed add finalizer due to %v", err))
+		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedAddFinalizer, fmt.Sprintf("Failed add finalizer due to %v", err))
 		return err
 	}
 	err := r.deployModel(ctx, gw, stack)
 	if err != nil {
 		return err
 	}
-	lbDNS, err := lb.DNSName().Resolve(ctx)
-	if err != nil {
-		return err
-	}
-
-	lbARN, err := lb.LoadBalancerARN().Resolve(ctx)
-	if err != nil {
-		r.logger.Error(err, "Unable to resolve LB ARN due to error")
-		lbARN = ""
-	}
 
 	if !backendSGRequired {
-		if err := r.backendSGProvider.Release(ctx, networking.ResourceTypeService, []types.NamespacedName{k8s.NamespacedName(gw)}); err != nil {
+		if err := r.backendSGProvider.Release(ctx, networking.ResourceTypeGateway, []types.NamespacedName{k8s.NamespacedName(gw)}); err != nil {
 			return err
 		}
 	}
 
-	if err = r.updateGatewayStatus(ctx, lbDNS, lbARN, gw); err != nil {
-		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedUpdateStatus, fmt.Sprintf("Failed update status due to %v", err))
+	if err = r.updateGatewayStatus(ctx, lb.Status, gw); err != nil {
+		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedUpdateStatus, fmt.Sprintf("Failed update status due to %v", err))
 		return err
 	}
-	r.eventRecorder.Event(gw, corev1.EventTypeNormal, k8s.ServiceEventReasonSuccessfullyReconciled, "Successfully reconciled")
+	r.eventRecorder.Event(gw, corev1.EventTypeNormal, k8s.GatewayEventReasonSuccessfullyReconciled, "Successfully reconciled")
 	return nil
 }
 
@@ -279,7 +296,7 @@ func (r *gatewayReconciler) deployModel(ctx context.Context, gw *gwv1.Gateway, s
 		if errors.As(err, &requeueNeededAfter) {
 			return err
 		}
-		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedDeployModel, fmt.Sprintf("Failed deploy model due to %v", err))
+		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedDeployModel, fmt.Sprintf("Failed deploy model due to %v", err))
 		return err
 	}
 	r.logger.Info("successfully deployed model", "gateway", k8s.NamespacedName(gw))
@@ -289,46 +306,58 @@ func (r *gatewayReconciler) deployModel(ctx context.Context, gw *gwv1.Gateway, s
 func (r *gatewayReconciler) buildModel(ctx context.Context, gw *gwv1.Gateway, cfg elbv2gw.LoadBalancerConfiguration, listenerToRoute map[int32][]routeutils.RouteDescriptor) (core.Stack, *elbv2model.LoadBalancer, bool, error) {
 	stack, lb, backendSGRequired, err := r.modelBuilder.Build(ctx, gw, cfg, listenerToRoute)
 	if err != nil {
-		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
+		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedDeployModel, fmt.Sprintf("Failed build model due to %v", err))
 		return nil, nil, false, err
 	}
 	stackJSON, err := r.stackMarshaller.Marshal(stack)
 	if err != nil {
-		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.ServiceEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
+		r.eventRecorder.Event(gw, corev1.EventTypeWarning, k8s.GatewayEventReasonFailedBuildModel, fmt.Sprintf("Failed build model due to %v", err))
 		return nil, nil, false, err
 	}
 	r.logger.Info("successfully built model", "model", stackJSON)
 	return stack, lb, backendSGRequired, nil
 }
 
-func (r *gatewayReconciler) updateGatewayStatus(ctx context.Context, lbDNS string, lbARN string, gw *gwv1.Gateway) error {
-	// TODO Consider LB ARN.
+func (r *gatewayReconciler) updateGatewayStatus(ctx context.Context, lbStatus *elbv2model.LoadBalancerStatus, gw *gwv1.Gateway) error {
+	// LB Status should always be set, if it's not, we need to prevent NPE
+	if lbStatus == nil {
+		r.logger.Info("Unable to update Gateway Status due to null LB status")
+		return nil
+	}
 
+	r.logger.Info("Got LB status", "status", *lbStatus)
 	gwOld := gw.DeepCopy()
 
-	needPatch := prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionAccepted), metav1.ConditionTrue, string(gwv1.GatewayConditionAccepted), "")
-	// Gateway Address Status
+	var needPatch bool
+	var requeueNeeded bool
+	if isGatewayProgrammed(*lbStatus) {
+		needPatch = prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionProgrammed), metav1.ConditionTrue, string(gwv1.GatewayConditionProgrammed), lbStatus.LoadBalancerARN)
+	} else {
+		requeueNeeded = true
+	}
+
+	needPatch = prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionAccepted), metav1.ConditionTrue, string(gwv1.GatewayConditionAccepted), "") || needPatch
 	if len(gw.Status.Addresses) != 1 ||
 		gw.Status.Addresses[0].Value != "" ||
-		gw.Status.Addresses[0].Value != lbDNS {
+		gw.Status.Addresses[0].Value != lbStatus.DNSName {
 		ipAddressType := gwv1.HostnameAddressType
 		gw.Status.Addresses = []gwv1.GatewayStatusAddress{
 			{
 				Type:  &ipAddressType,
-				Value: lbDNS,
+				Value: lbStatus.DNSName,
 			},
 		}
 		needPatch = true
-	}
-
-	if lbDNS != "" {
-		needPatch = needPatch || prepareGatewayConditionUpdate(gw, string(gwv1.GatewayConditionProgrammed), metav1.ConditionTrue, string(gwv1.GatewayConditionProgrammed), lbARN)
 	}
 
 	if needPatch {
 		if err := r.k8sClient.Status().Patch(ctx, gw, client.MergeFrom(gwOld)); err != nil {
 			return errors.Wrapf(err, "failed to update gw status: %v", k8s.NamespacedName(gw))
 		}
+	}
+
+	if requeueNeeded {
+		return runtime.NewRequeueNeededAfter(requeueMessage, statusUpdateRequeueTime)
 	}
 
 	return nil
@@ -486,5 +515,13 @@ func (r *gatewayReconciler) setupNLBGatewayControllerWatches(ctrl controller.Con
 		return err
 	}
 	return nil
+}
+
+func isGatewayProgrammed(lbStatus elbv2model.LoadBalancerStatus) bool {
+	if lbStatus.ProvisioningState == nil {
+		return false
+	}
+
+	return lbStatus.ProvisioningState.Code == elbv2types.LoadBalancerStateEnumActive || lbStatus.ProvisioningState.Code == elbv2types.LoadBalancerStateEnumActiveImpaired
 
 }

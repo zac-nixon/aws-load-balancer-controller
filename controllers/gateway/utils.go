@@ -2,13 +2,16 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -118,4 +121,17 @@ func resolveLoadBalancerConfig(ctx context.Context, k8sClient client.Client, ref
 	}
 
 	return lbConf, err
+}
+
+func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) string {
+
+	allRoutes := make([]string, 0)
+
+	for _, lr := range listenerRoutes {
+		for _, r := range lr {
+			allRoutes = append(allRoutes, fmt.Sprintf("(%s, %s:%s)", r.GetRouteKind(), r.GetRouteNamespacedName().Namespace, r.GetRouteNamespacedName().Name))
+		}
+	}
+
+	return strings.Join(allRoutes, ",")
 }
