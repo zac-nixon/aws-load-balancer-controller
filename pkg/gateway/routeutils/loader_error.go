@@ -7,7 +7,7 @@ import (
 type LoaderError interface {
 	Error() string
 	GetRawError() error
-	GetCondition() gwv1.GatewayConditionReason
+	GetReason() gwv1.GatewayConditionReason
 	IsUpdate() bool
 }
 
@@ -35,7 +35,7 @@ func (e *loaderErrorImpl) GetRawError() error {
 	return e.underlyingErr
 }
 
-func (e *loaderErrorImpl) GetCondition() gwv1.GatewayConditionReason {
+func (e *loaderErrorImpl) GetReason() gwv1.GatewayConditionReason {
 	return e.resolvedCondition
 }
 

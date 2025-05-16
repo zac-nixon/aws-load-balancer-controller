@@ -162,5 +162,5 @@ func GetHostnamePrecedenceOrder(hostnameOne, hostnameTwo string) int {
 }
 
 func generateInvalidMessageWithRouteDetails(initialMessage string, routeKind RouteKind, routeIdentifier types.NamespacedName) string {
-	return fmt.Sprintf("%s. Invalid data can be found in (%s, %s:%s)", initialMessage, routeKind, routeIdentifier.Namespace, routeIdentifier.Name)
+	return fmt.Sprintf("%s. Invalid data can be found in route (%s, %s:%s)", initialMessage, routeKind, routeIdentifier.Namespace, routeIdentifier.Name)
 }

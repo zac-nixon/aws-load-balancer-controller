@@ -2,19 +2,27 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	gatewayClassAnnotationLastProcessedConfig          = "elbv2.k8s.aws/last-processed-config"
 	gatewayClassAnnotationLastProcessedConfigTimestamp = gatewayClassAnnotationLastProcessedConfig + "-timestamp"
+
+	// The max message that can be stored in a condition
+	maxMessageLength = 32700
 )
 
 func updateGatewayClassLastProcessedConfig(ctx context.Context, k8sClient client.Client, gwClass *gwv1.GatewayClass, lbConf *elbv2gw.LoadBalancerConfiguration) error {
@@ -79,17 +87,28 @@ func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string,
 		}
 	}
 
+	truncatedMessage := truncateMessage(message)
+
 	if indxToUpdate != -1 {
-		if derivedCondition.Status != newStatus || derivedCondition.Message != message || derivedCondition.Reason != reason {
+		if derivedCondition.Status != newStatus || derivedCondition.Message != truncatedMessage || derivedCondition.Reason != reason {
 			gw.Status.Conditions[indxToUpdate].LastTransitionTime = metav1.NewTime(time.Now())
 			gw.Status.Conditions[indxToUpdate].ObservedGeneration = gw.Generation
 			gw.Status.Conditions[indxToUpdate].Status = newStatus
-			gw.Status.Conditions[indxToUpdate].Message = message
+			gw.Status.Conditions[indxToUpdate].Message = truncatedMessage
 			gw.Status.Conditions[indxToUpdate].Reason = reason
 			return true
 		}
 	}
 	return false
+}
+
+func truncateMessage(s string) string {
+	if utf8.RuneCountInString(s) <= maxMessageLength {
+		return s
+	}
+
+	runes := []rune(s)
+	return string(runes[:maxMessageLength]) + "..."
 }
 
 func deriveGatewayClassAcceptedStatus(gwClass *gwv1.GatewayClass) (metav1.ConditionStatus, int) {
@@ -118,4 +137,43 @@ func resolveLoadBalancerConfig(ctx context.Context, k8sClient client.Client, ref
 	}
 
 	return lbConf, err
+}
+
+// generateRouteList generate a deterministic route list.
+//
+//	Due to the nature of golang maps, we need to sort the keys and for good measure we sort the route descriptors too
+func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) string {
+
+	allRoutes := make([]string, 0)
+
+	routeKeys := make([]int32, 0)
+
+	for k := range listenerRoutes {
+		routeKeys = append(routeKeys, k)
+	}
+
+	sort.Slice(routeKeys, func(i, j int) bool {
+		return routeKeys[i] > routeKeys[j]
+	})
+
+	for _, k := range routeKeys {
+		lr := listenerRoutes[k]
+		sort.Slice(lr, func(i, j int) bool {
+			if lr[i].GetRouteNamespacedName().String() > lr[j].GetRouteNamespacedName().String() {
+				return true
+			}
+
+			if lr[i].GetRouteNamespacedName().String() < lr[j].GetRouteNamespacedName().String() {
+				return false
+			}
+			return lr[i].GetRouteKind() > lr[j].GetRouteKind()
+		})
+		for _, lr := range listenerRoutes {
+			for _, r := range lr {
+				allRoutes = append(allRoutes, fmt.Sprintf("(%s, %s:%s)", r.GetRouteKind(), r.GetRouteNamespacedName().Namespace, r.GetRouteNamespacedName().Name))
+			}
+		}
+	}
+
+	return strings.Join(allRoutes, ",")
 }
