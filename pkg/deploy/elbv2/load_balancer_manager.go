@@ -393,6 +393,10 @@ func buildResLoadBalancerStatus(sdkLB LoadBalancerWithTags) elbv2model.LoadBalan
 	return elbv2model.LoadBalancerStatus{
 		LoadBalancerARN: awssdk.ToString(sdkLB.LoadBalancer.LoadBalancerArn),
 		DNSName:         awssdk.ToString(sdkLB.LoadBalancer.DNSName),
+		ProvisioningState: &elbv2types.LoadBalancerState{
+			Code:   elbv2types.LoadBalancerStateEnumProvisioning,
+			Reason: awssdk.String("foo"),
+		},
 	}
 }
 
