@@ -306,8 +306,6 @@ func (r *gatewayReconciler) updateGatewayStatusSuccess(ctx context.Context, lbSt
 		r.logger.Info("Unable to update Gateway Status due to null LB status")
 		return nil
 	}
-
-	r.logger.Info("Got LB status", "status", *lbStatus)
 	gwOld := gw.DeepCopy()
 
 	var needPatch bool

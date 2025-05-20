@@ -363,6 +363,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 						Namespace:   "my-svc-ns",
 						Name:        "k8s-myrouten-myroute-d02da2803b",
 						Annotations: make(map[string]string),
+						Labels:      make(map[string]string),
 					},
 					Spec: elbv2model.TargetGroupBindingSpec{
 						TargetType: &instanceType,
@@ -441,6 +442,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 						Namespace:   "my-svc-ns",
 						Name:        "k8s-myrouten-myroute-d146029dfb",
 						Annotations: make(map[string]string),
+						Labels:      make(map[string]string),
 					},
 					Spec: elbv2model.TargetGroupBindingSpec{
 						TargetType: &instanceType,
@@ -514,6 +516,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 						Namespace:   "my-svc-ns",
 						Name:        "k8s-myrouten-myroute-d9d6c4e6eb",
 						Annotations: make(map[string]string),
+						Labels:      make(map[string]string),
 					},
 					Spec: elbv2model.TargetGroupBindingSpec{
 						TargetType: &ipType,
@@ -592,6 +595,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 						Namespace:   "my-svc-ns",
 						Name:        "k8s-myrouten-myroute-400113e816",
 						Annotations: make(map[string]string),
+						Labels:      make(map[string]string),
 					},
 					Spec: elbv2model.TargetGroupBindingSpec{
 						TargetType: &ipType,
@@ -606,7 +610,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 			},
 		},
 		{
-			name:                     "no tg config - ip - alb - add infra annotations",
+			name:                     "no tg config - ip - alb - add infra annotations / labels",
 			tags:                     make(map[string]string),
 			lbType:                   elbv2model.LoadBalancerTypeApplication,
 			disableRestrictedSGRules: false,
@@ -620,6 +624,9 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 					Infrastructure: &gwv1.GatewayInfrastructure{
 						Annotations: map[gwv1.AnnotationKey]gwv1.AnnotationValue{
 							"foo": "bar",
+						},
+						Labels: map[gwv1.LabelKey]gwv1.LabelValue{
+							"labelfoo": "labelbar",
 						},
 					},
 				},
@@ -678,6 +685,9 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 						Name:      "k8s-myrouten-myroute-400113e816",
 						Annotations: map[string]string{
 							"foo": "bar",
+						},
+						Labels: map[string]string{
+							"labelfoo": "labelbar",
 						},
 					},
 					Spec: elbv2model.TargetGroupBindingSpec{

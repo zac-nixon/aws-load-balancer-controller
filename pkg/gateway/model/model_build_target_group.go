@@ -141,10 +141,19 @@ func (builder *targetGroupBuilderImpl) buildTargetGroupBindingSpec(gw *gwv1.Gate
 	multiClusterEnabled := builder.buildTargetGroupBindingMultiClusterFlag(tgProps)
 
 	annotations := make(map[string]string)
+	labels := make(map[string]string)
 
-	if gw != nil && gw.Spec.Infrastructure != nil && gw.Spec.Infrastructure.Annotations != nil {
-		for k, v := range gw.Spec.Infrastructure.Annotations {
-			annotations[string(k)] = string(v)
+	if gw != nil && gw.Spec.Infrastructure != nil {
+		if gw.Spec.Infrastructure.Annotations != nil {
+			for k, v := range gw.Spec.Infrastructure.Annotations {
+				annotations[string(k)] = string(v)
+			}
+		}
+
+		if gw.Spec.Infrastructure.Labels != nil {
+			for k, v := range gw.Spec.Infrastructure.Labels {
+				labels[string(k)] = string(v)
+			}
 		}
 	}
 
@@ -154,6 +163,7 @@ func (builder *targetGroupBuilderImpl) buildTargetGroupBindingSpec(gw *gwv1.Gate
 				Namespace:   backend.Service.Namespace,
 				Name:        tgSpec.Name,
 				Annotations: annotations,
+				Labels:      labels,
 			},
 			Spec: elbv2model.TargetGroupBindingSpec{
 				TargetGroupARN: nil, // This should get filled in later!
