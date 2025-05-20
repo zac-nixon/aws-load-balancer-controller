@@ -25,9 +25,10 @@ const (
 	maxMessageLength = 32700
 )
 
+// updateGatewayClassLastProcessedConfig updates the gateway class annotations with the last processed lb config resource version or "" if no lb config is attached to the gatewayclass
 func updateGatewayClassLastProcessedConfig(ctx context.Context, k8sClient client.Client, gwClass *gwv1.GatewayClass, lbConf *elbv2gw.LoadBalancerConfiguration) error {
 
-	calculatedVersion := gatewayClassAnnotationLastProcessedConfig
+	calculatedVersion := ""
 
 	if lbConf != nil {
 		calculatedVersion = lbConf.ResourceVersion
@@ -40,12 +41,16 @@ func updateGatewayClassLastProcessedConfig(ctx context.Context, k8sClient client
 	}
 
 	gwClassOld := gwClass.DeepCopy()
+	if gwClass.Annotations == nil {
+		gwClass.Annotations = make(map[string]string)
+	}
 	gwClass.Annotations[gatewayClassAnnotationLastProcessedConfig] = calculatedVersion
 	gwClass.Annotations[gatewayClassAnnotationLastProcessedConfigTimestamp] = strconv.FormatInt(time.Now().Unix(), 10)
 
 	return k8sClient.Patch(ctx, gwClass, client.MergeFrom(gwClassOld))
 }
 
+// getStoredProcessedConfig retrieves the resource version attached to the lb config referenced by the gateway class or nil if no such mapping exists.
 func getStoredProcessedConfig(gwClass *gwv1.GatewayClass) *string {
 	var storedVersion *string
 
@@ -58,10 +63,20 @@ func getStoredProcessedConfig(gwClass *gwv1.GatewayClass) *string {
 	return storedVersion
 }
 
+// updateGatewayClassAcceptedCondition updates the 'accepted' condition on the gateway class to the passed in parameters. if no 'Accepted' condition exists, do nothing.
 func updateGatewayClassAcceptedCondition(ctx context.Context, k8sClient client.Client, gwClass *gwv1.GatewayClass, newStatus metav1.ConditionStatus, reason string, message string) error {
-	derivedStatus, indxToUpdate := deriveGatewayClassAcceptedStatus(gwClass)
+	indxToUpdate := deriveAcceptedConditionIndex(gwClass)
 
-	if indxToUpdate != -1 && derivedStatus != newStatus {
+	if indxToUpdate != -1 {
+
+		storedStatus := gwClass.Status.Conditions[indxToUpdate].Status
+		storedMessage := gwClass.Status.Conditions[indxToUpdate].Message
+		storedReason := gwClass.Status.Conditions[indxToUpdate].Reason
+
+		if storedStatus == newStatus && storedMessage == message && storedReason == reason {
+			return nil
+		}
+
 		gwClassOld := gwClass.DeepCopy()
 		gwClass.Status.Conditions[indxToUpdate].LastTransitionTime = metav1.NewTime(time.Now())
 		gwClass.Status.Conditions[indxToUpdate].ObservedGeneration = gwClass.Generation
@@ -75,6 +90,7 @@ func updateGatewayClassAcceptedCondition(ctx context.Context, k8sClient client.C
 	return nil
 }
 
+// prepareGatewayConditionUpdate inserts the necessary data into the condition field of the gateway. The caller should patch the corresponding gateway. Returns false when no change was performed.
 func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string, newStatus metav1.ConditionStatus, reason string, message string) bool {
 
 	indxToUpdate := -1
@@ -87,6 +103,7 @@ func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string,
 		}
 	}
 
+	// 32768 is the max message limit
 	truncatedMessage := truncateMessage(message)
 
 	if indxToUpdate != -1 {
@@ -111,15 +128,18 @@ func truncateMessage(s string) string {
 	return string(runes[:maxMessageLength]) + "..."
 }
 
-func deriveGatewayClassAcceptedStatus(gwClass *gwv1.GatewayClass) (metav1.ConditionStatus, int) {
+// deriveAcceptedConditionIndex returns the index of the condition pertaining to the accepted condition.
+// -1 if the condition doesn't exist
+func deriveAcceptedConditionIndex(gwClass *gwv1.GatewayClass) int {
 	for i, v := range gwClass.Status.Conditions {
 		if v.Type == string(gwv1.GatewayClassReasonAccepted) {
-			return v.Status, i
+			return i
 		}
 	}
-	return metav1.ConditionFalse, -1
+	return -1
 }
 
+// resolveLoadBalancerConfig returns the lb config referenced in the ParametersReference.
 func resolveLoadBalancerConfig(ctx context.Context, k8sClient client.Client, reference *gwv1.ParametersReference) (*elbv2gw.LoadBalancerConfiguration, error) {
 	var lbConf *elbv2gw.LoadBalancerConfiguration
 
@@ -146,34 +166,13 @@ func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) st
 
 	allRoutes := make([]string, 0)
 
-	routeKeys := make([]int32, 0)
-
-	for k := range listenerRoutes {
-		routeKeys = append(routeKeys, k)
-	}
-
-	sort.Slice(routeKeys, func(i, j int) bool {
-		return routeKeys[i] > routeKeys[j]
-	})
-
-	for _, k := range routeKeys {
-		lr := listenerRoutes[k]
-		sort.Slice(lr, func(i, j int) bool {
-			if lr[i].GetRouteNamespacedName().String() > lr[j].GetRouteNamespacedName().String() {
-				return true
-			}
-
-			if lr[i].GetRouteNamespacedName().String() < lr[j].GetRouteNamespacedName().String() {
-				return false
-			}
-			return lr[i].GetRouteKind() > lr[j].GetRouteKind()
-		})
-		for _, lr := range listenerRoutes {
-			for _, r := range lr {
-				allRoutes = append(allRoutes, fmt.Sprintf("(%s, %s:%s)", r.GetRouteKind(), r.GetRouteNamespacedName().Namespace, r.GetRouteNamespacedName().Name))
-			}
+	for _, lr := range listenerRoutes {
+		for _, r := range lr {
+			allRoutes = append(allRoutes, fmt.Sprintf("(%s, %s:%s)", r.GetRouteKind(), r.GetRouteNamespacedName().Namespace, r.GetRouteNamespacedName().Name))
 		}
 	}
+
+	sort.Strings(allRoutes)
 
 	return strings.Join(allRoutes, ",")
 }

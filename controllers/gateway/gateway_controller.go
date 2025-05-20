@@ -221,23 +221,6 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	return r.reconcileUpdate(ctx, gw, stack, lb, backendSGRequired)
 }
 
-func (r *gatewayReconciler) resolveLoadBalancerConfig(ctx context.Context, k8sClient client.Client, reference *gwv1.ParametersReference) (*elbv2gw.LoadBalancerConfiguration, error) {
-	var lbConf *elbv2gw.LoadBalancerConfiguration
-	var err error
-	if reference != nil {
-		lbConf = &elbv2gw.LoadBalancerConfiguration{}
-		if reference.Namespace != nil {
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Namespace: string(*reference.Namespace),
-				Name:      reference.Name,
-			}, lbConf)
-		} else {
-			err = errors.New("Namespace must be specified in ParametersRef")
-		}
-	}
-	return lbConf, err
-}
-
 func (r *gatewayReconciler) reconcileDelete(ctx context.Context, gw *gwv1.Gateway, stack core.Stack, routes map[int32][]routeutils.RouteDescriptor) error {
 	for _, routeList := range routes {
 		if len(routeList) != 0 {

@@ -31,7 +31,7 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, typeSpeci
 
 	// We only support references of type service.
 	if backendRef.Kind != nil && *backendRef.Kind != "Service" {
-		initialErrorMessage := "Backend Ref must be on kind 'Service'"
+		initialErrorMessage := "Backend Ref must be of kind 'Service'"
 		return nil, wrapError(errors.Errorf("%s", generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)), gwv1.GatewayReasonListenersNotValid)
 	}
 
