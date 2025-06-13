@@ -3,9 +3,6 @@ package ingress
 import (
 	"context"
 	"fmt"
-
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +32,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"time"
 )
 
 const (
@@ -91,6 +90,8 @@ func NewGroupReconciler(cloud services.Cloud, k8sClient client.Client, eventReco
 		controllerName:        controllerName,
 		reconcileCounters:     reconcileCounters,
 
+		cooldownTracker: deploy.NewCoolDownTracker(logger),
+
 		maxConcurrentReconciles: controllerConfig.IngressConfig.MaxConcurrentReconciles,
 	}
 }
@@ -113,6 +114,8 @@ type groupReconciler struct {
 	controllerName        string
 	reconcileCounters     *metricsutil.ReconcileCounters
 
+	cooldownTracker deploy.CoolDownTracker
+
 	maxConcurrentReconciles int
 }
 
@@ -132,6 +135,17 @@ func (r *groupReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 
 func (r *groupReconciler) reconcile(ctx context.Context, req reconcile.Request) error {
 	ingGroupID := ingress.DecodeGroupIDFromReconcileRequest(req)
+
+	shouldExit, needCallback := r.cooldownTracker.IsCoolingDown(ingGroupID.String())
+
+	if shouldExit {
+		if needCallback {
+			r.logger.Info("Scheduling future cb")
+			return runtime.NewRequeueNeededAfter("batching stuff", 30*time.Second)
+		}
+		return nil
+	}
+
 	var err error
 	var ingGroup ingress.Group
 	loadIngressFn := func() {
@@ -145,6 +159,7 @@ func (r *groupReconciler) reconcile(ctx context.Context, req reconcile.Request) 
 	addFinalizerFn := func() {
 		err = r.groupFinalizerManager.AddGroupFinalizer(ctx, ingGroupID, ingGroup.Members)
 	}
+
 	r.metricsCollector.ObserveControllerReconcileLatency(controllerName, "add_group_finalizer", addFinalizerFn)
 	if err != nil {
 		r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeWarning, k8s.IngressEventReasonFailedAddFinalizer, fmt.Sprintf("Failed add finalizer due to %v", err))
@@ -195,6 +210,7 @@ func (r *groupReconciler) reconcile(ctx context.Context, req reconcile.Request) 
 	}
 
 	r.recordIngressGroupEvent(ctx, ingGroup, corev1.EventTypeNormal, k8s.IngressEventReasonSuccessfullyReconciled, "Successfully reconciled")
+	r.cooldownTracker.Mark(ingGroupID.String())
 	return nil
 }
 

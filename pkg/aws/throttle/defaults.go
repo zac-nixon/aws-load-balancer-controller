@@ -39,13 +39,13 @@ func NewDefaultServiceOperationsThrottleConfig() *ServiceOperationsThrottleConfi
 			elasticloadbalancingv2.ServiceID: {
 				{
 					operationPtn: regexp.MustCompile("^RegisterTargets|^DeregisterTargets"),
-					r:            rate.Limit(4),
-					burst:        20,
+					r:            rate.Limit(40),
+					burst:        200,
 				},
 				{
 					operationPtn: regexp.MustCompile(".*"),
-					r:            rate.Limit(10),
-					burst:        40,
+					r:            rate.Limit(100),
+					burst:        400,
 				},
 			},
 		},
