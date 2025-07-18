@@ -46,9 +46,14 @@ func (t *convertedHTTPRouteRule) GetBackends() []Backend {
 /* Route Description */
 
 type httpRouteDescription struct {
+	identifier    RouteIdentifier
 	route         *gwv1.HTTPRoute
 	rules         []RouteRule
 	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error, error)
+}
+
+func (httpRoute *httpRouteDescription) GetRouteIdentifier() RouteIdentifier {
+	return httpRoute.identifier
 }
 
 func (httpRoute *httpRouteDescription) GetAttachedRules() []RouteRule {
@@ -62,7 +67,7 @@ func (httpRoute *httpRouteDescription) loadAttachedRules(ctx context.Context, k8
 	for _, rule := range httpRoute.route.Spec.Rules {
 		convertedBackends := make([]Backend, 0)
 		for _, backend := range rule.BackendRefs {
-			convertedBackend, warningErr, fatalErr := httpRoute.backendLoader(ctx, k8sClient, backend, backend.BackendRef, httpRoute.GetRouteNamespacedName(), httpRoute.GetRouteKind())
+			convertedBackend, warningErr, fatalErr := httpRoute.backendLoader(ctx, k8sClient, backend, backend.BackendRef, httpRoute.identifier.GetNamespacedName(), httpRoute.identifier.GetKind())
 			if warningErr != nil {
 				allErrors = append(allErrors, routeLoadError{
 					Err: warningErr,
@@ -96,16 +101,8 @@ func (httpRoute *httpRouteDescription) GetParentRefs() []gwv1.ParentReference {
 	return httpRoute.route.Spec.ParentRefs
 }
 
-func (httpRoute *httpRouteDescription) GetRouteKind() RouteKind {
-	return HTTPRouteKind
-}
-
 func (httpRoute *httpRouteDescription) GetRouteGeneration() int64 {
 	return httpRoute.route.Generation
-}
-
-func (httpRoute *httpRouteDescription) GetRouteNamespacedName() types.NamespacedName {
-	return k8s.NamespacedName(httpRoute.route)
 }
 
 func (httpRoute *httpRouteDescription) GetBackendRefs() []gwv1.BackendRef {
@@ -125,7 +122,7 @@ func (httpRoute *httpRouteDescription) GetRouteCreateTimestamp() time.Time {
 }
 
 func convertHTTPRoute(r gwv1.HTTPRoute) *httpRouteDescription {
-	return &httpRouteDescription{route: &r, backendLoader: commonBackendLoader}
+	return &httpRouteDescription{route: &r, backendLoader: commonBackendLoader, identifier: NewRouteIdentifier(k8s.NamespacedName(&r), HTTPRouteKind)}
 }
 
 func (httpRoute *httpRouteDescription) GetRawRoute() interface{} {

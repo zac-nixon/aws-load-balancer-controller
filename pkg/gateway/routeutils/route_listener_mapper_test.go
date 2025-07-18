@@ -15,7 +15,7 @@ type mockListenerAttachmentHelper struct {
 }
 
 func makeListenerAttachmentMapKey(listener gwv1.Listener, route preLoadRouteDescriptor) string {
-	nsn := route.GetRouteNamespacedName()
+	nsn := route.GetRouteIdentifier().GetNamespacedName()
 	return fmt.Sprintf("%s-%d-%s-%s", listener.Name, listener.Port, nsn.Name, nsn.Namespace)
 }
 
@@ -30,7 +30,7 @@ type mockRouteAttachmentHelper struct {
 }
 
 func makeRouteGatewayMapKey(gw gwv1.Gateway, route preLoadRouteDescriptor) string {
-	nsn := route.GetRouteNamespacedName()
+	nsn := route.GetRouteIdentifier().GetNamespacedName()
 	return fmt.Sprintf("%s-%s-%s-%s", gw.Name, gw.Namespace, nsn.Name, nsn.Namespace)
 }
 

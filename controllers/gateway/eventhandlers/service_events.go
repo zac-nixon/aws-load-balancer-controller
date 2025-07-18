@@ -96,26 +96,28 @@ func (h *enqueueRequestsForServiceEvent) enqueueImpactedL4Routes(
 	}
 	filteredRoutesBySvc := routeutils.FilterRoutesBySvc(l4Routes, svc)
 	for _, route := range filteredRoutesBySvc {
-		routeType := route.GetRouteKind()
+		routeId := route.GetRouteIdentifier()
+		routeType := routeId.GetKind()
+		routeNsn := routeId.GetNamespacedName()
 		switch routeType {
 		case routeutils.TCPRouteKind:
 			h.logger.V(1).Info("enqueue tcproute for service event",
 				"service", svc.Name,
-				"tcproute", route.GetRouteNamespacedName())
+				"tcproute", routeNsn)
 			h.tcpRouteEventChan <- event.TypedGenericEvent[*gwalpha2.TCPRoute]{
 				Object: route.GetRawRoute().(*gwalpha2.TCPRoute),
 			}
 		case routeutils.UDPRouteKind:
 			h.logger.V(1).Info("enqueue updroute for service event",
 				"service", svc.Name,
-				"udproute", route.GetRouteNamespacedName())
+				"udproute", routeNsn)
 			h.udpRouteEventChan <- event.TypedGenericEvent[*gwalpha2.UDPRoute]{
 				Object: route.GetRawRoute().(*gwalpha2.UDPRoute),
 			}
 		case routeutils.TLSRouteKind:
 			h.logger.V(1).Info("enqueue tlsroute for service event",
 				"service", svc.Name,
-				"tlsroute", route.GetRouteNamespacedName())
+				"tlsroute", routeNsn)
 			h.tlsRouteEventChan <- event.TypedGenericEvent[*gwalpha2.TLSRoute]{
 				Object: route.GetRawRoute().(*gwalpha2.TLSRoute),
 			}
@@ -134,19 +136,21 @@ func (h *enqueueRequestsForServiceEvent) enqueueImpactedL7Routes(
 	}
 	filteredRoutesBySvc := routeutils.FilterRoutesBySvc(l7Routes, svc)
 	for _, route := range filteredRoutesBySvc {
-		routeType := route.GetRouteKind()
+		routeId := route.GetRouteIdentifier()
+		routeType := routeId.GetKind()
+		routeNsn := routeId.GetNamespacedName()
 		switch routeType {
 		case routeutils.HTTPRouteKind:
 			h.logger.V(1).Info("enqueue httproute for service event",
 				"service", svc.Name,
-				"httproute", route.GetRouteNamespacedName())
+				"httproute", routeNsn)
 			h.httpRouteEventChan <- event.TypedGenericEvent[*gatewayv1.HTTPRoute]{
 				Object: route.GetRawRoute().(*gatewayv1.HTTPRoute),
 			}
 		case routeutils.GRPCRouteKind:
 			h.logger.V(1).Info("enqueue grpcroute for service event",
 				"service", svc.Name,
-				"grpcroute", route.GetRouteNamespacedName())
+				"grpcroute", routeNsn)
 			h.grpcRouteEventChan <- event.TypedGenericEvent[*gatewayv1.GRPCRoute]{
 				Object: route.GetRawRoute().(*gatewayv1.GRPCRoute),
 			}

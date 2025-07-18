@@ -90,9 +90,9 @@ func Test_ListTLSRoutes(t *testing.T) {
 
 	itemMap := make(map[string]string)
 	for _, v := range result {
-		routeNsn := v.GetRouteNamespacedName()
+		routeNsn := v.GetRouteIdentifier().GetNamespacedName()
 		itemMap[routeNsn.Namespace] = routeNsn.Name
-		assert.Equal(t, TLSRouteKind, v.GetRouteKind())
+		assert.Equal(t, TLSRouteKind, v.GetRouteIdentifier().GetKind())
 		assert.NotNil(t, v.GetRawRoute())
 
 		if routeNsn.Name == "foo1" {

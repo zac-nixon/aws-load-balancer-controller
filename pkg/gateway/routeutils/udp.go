@@ -3,7 +3,6 @@ package routeutils
 import (
 	"context"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -47,9 +46,14 @@ func (t *convertedUDPRouteRule) GetBackends() []Backend {
 /* Route Description */
 
 type udpRouteDescription struct {
+	identifier    RouteIdentifier
 	route         *gwalpha2.UDPRoute
 	rules         []RouteRule
 	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error, error)
+}
+
+func (udpRoute *udpRouteDescription) GetRouteIdentifier() RouteIdentifier {
+	return udpRoute.identifier
 }
 
 func (udpRoute *udpRouteDescription) GetAttachedRules() []RouteRule {
@@ -63,7 +67,7 @@ func (udpRoute *udpRouteDescription) loadAttachedRules(ctx context.Context, k8sC
 		convertedBackends := make([]Backend, 0)
 
 		for _, backend := range rule.BackendRefs {
-			convertedBackend, warningErr, fatalErr := udpRoute.backendLoader(ctx, k8sClient, backend, backend, udpRoute.GetRouteNamespacedName(), udpRoute.GetRouteKind())
+			convertedBackend, warningErr, fatalErr := udpRoute.backendLoader(ctx, k8sClient, backend, backend, udpRoute.GetRouteIdentifier().GetNamespacedName(), udpRoute.GetRouteIdentifier().GetKind())
 			if warningErr != nil {
 				allErrors = append(allErrors, routeLoadError{
 					Err: warningErr,
@@ -97,20 +101,12 @@ func (udpRoute *udpRouteDescription) GetParentRefs() []gwv1.ParentReference {
 	return udpRoute.route.Spec.ParentRefs
 }
 
-func (udpRoute *udpRouteDescription) GetRouteKind() RouteKind {
-	return UDPRouteKind
-}
-
 func (udpRoute *udpRouteDescription) GetRouteGeneration() int64 {
 	return udpRoute.route.Generation
 }
 
 func convertUDPRoute(r gwalpha2.UDPRoute) *udpRouteDescription {
 	return &udpRouteDescription{route: &r, backendLoader: commonBackendLoader}
-}
-
-func (udpRoute *udpRouteDescription) GetRouteNamespacedName() types.NamespacedName {
-	return k8s.NamespacedName(udpRoute.route)
 }
 
 func (udpRoute *udpRouteDescription) GetRawRoute() interface{} {

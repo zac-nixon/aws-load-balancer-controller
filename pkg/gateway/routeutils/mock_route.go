@@ -13,20 +13,16 @@ type MockRoute struct {
 	Hostnames []string
 }
 
+func (m *MockRoute) GetRouteIdentifier() RouteIdentifier {
+	return NewRouteIdentifier(types.NamespacedName{
+		Namespace: m.Namespace,
+		Name:      m.Name,
+	}, m.Kind)
+}
+
 func (m *MockRoute) GetBackendRefs() []gwv1.BackendRef {
 	//TODO implement me
 	panic("implement me")
-}
-
-func (m *MockRoute) GetRouteNamespacedName() types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: m.Namespace,
-		Name:      m.Name,
-	}
-}
-
-func (m *MockRoute) GetRouteKind() RouteKind {
-	return m.Kind
 }
 
 func (m *MockRoute) GetHostnames() []gwv1.Hostname {

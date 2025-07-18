@@ -31,16 +31,12 @@ type mockRoute struct {
 	generation     int64
 }
 
+func (m *mockRoute) GetRouteIdentifier() RouteIdentifier {
+	return NewRouteIdentifier(m.namespacedName, m.routeKind)
+}
+
 func (m *mockRoute) loadAttachedRules(context context.Context, k8sClient client.Client) (RouteDescriptor, []routeLoadError) {
 	return m, nil
-}
-
-func (m *mockRoute) GetRouteNamespacedName() types.NamespacedName {
-	return m.namespacedName
-}
-
-func (m *mockRoute) GetRouteKind() RouteKind {
-	return m.routeKind
 }
 
 func (m *mockRoute) GetHostnames() []gwv1.Hostname {

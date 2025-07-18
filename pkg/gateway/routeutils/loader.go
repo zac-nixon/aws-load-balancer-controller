@@ -2,7 +2,6 @@ package routeutils
 
 import (
 	"context"
-	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -103,7 +102,7 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 	for _, routeList := range loadedRoute {
 		for _, route := range routeList {
 			deferredRouteReconciler.Enqueue(
-				GenerateRouteData(true, true, string(gwv1.RouteConditionAccepted), RouteStatusInfoAcceptedMessage, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw),
+				GenerateRouteData(true, true, string(gwv1.RouteConditionAccepted), RouteStatusInfoAcceptedMessage, route.GetRouteIdentifier().GetNamespacedName(), route.GetRouteIdentifier().GetKind(), route.GetRouteGeneration(), gw),
 			)
 		}
 	}
@@ -120,9 +119,8 @@ func (l *loaderImpl) loadChildResources(ctx context.Context, preloadedRoutes map
 
 	for port, preloadedRouteList := range preloadedRoutes {
 		for _, preloadedRoute := range preloadedRouteList {
-			namespacedNameRoute := preloadedRoute.GetRouteNamespacedName()
-			routeKind := preloadedRoute.GetRouteKind()
-			cacheKey := fmt.Sprintf("%s-%s-%s", routeKind, namespacedNameRoute.Name, namespacedNameRoute.Namespace)
+			routeId := preloadedRoute.GetRouteIdentifier()
+			cacheKey := routeId.String()
 
 			cachedRoute, ok := resourceCache[cacheKey]
 			if ok {
@@ -136,7 +134,7 @@ func (l *loaderImpl) loadChildResources(ctx context.Context, preloadedRoutes map
 					var loaderErr LoaderError
 					if errors.As(lare.Err, &loaderErr) {
 						deferredRouteReconciler.Enqueue(
-							GenerateRouteData(false, false, string(loaderErr.GetRouteReason()), loaderErr.GetRouteMessage(), preloadedRoute.GetRouteNamespacedName(), preloadedRoute.GetRouteKind(), preloadedRoute.GetRouteGeneration(), gw),
+							GenerateRouteData(false, false, string(loaderErr.GetRouteReason()), loaderErr.GetRouteMessage(), preloadedRoute.GetRouteIdentifier().GetNamespacedName(), preloadedRoute.GetRouteIdentifier().GetKind(), preloadedRoute.GetRouteGeneration(), gw),
 						)
 					}
 					if lare.Fatal {

@@ -46,9 +46,14 @@ func (t *convertedGRPCRouteRule) GetBackends() []Backend {
 /* Route Description */
 
 type grpcRouteDescription struct {
+	identifier    RouteIdentifier
 	route         *gwv1.GRPCRoute
 	rules         []RouteRule
 	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error, error)
+}
+
+func (grpcRoute *grpcRouteDescription) GetRouteIdentifier() RouteIdentifier {
+	return grpcRoute.identifier
 }
 
 func (grpcRoute *grpcRouteDescription) loadAttachedRules(ctx context.Context, k8sClient client.Client) (RouteDescriptor, []routeLoadError) {
@@ -57,7 +62,7 @@ func (grpcRoute *grpcRouteDescription) loadAttachedRules(ctx context.Context, k8
 	for _, rule := range grpcRoute.route.Spec.Rules {
 		convertedBackends := make([]Backend, 0)
 		for _, backend := range rule.BackendRefs {
-			convertedBackend, warningErr, fatalErr := grpcRoute.backendLoader(ctx, k8sClient, backend, backend.BackendRef, grpcRoute.GetRouteNamespacedName(), grpcRoute.GetRouteKind())
+			convertedBackend, warningErr, fatalErr := grpcRoute.backendLoader(ctx, k8sClient, backend, backend.BackendRef, grpcRoute.GetRouteIdentifier().GetNamespacedName(), grpcRoute.GetRouteIdentifier().GetKind())
 			if warningErr != nil {
 				allErrors = append(allErrors, routeLoadError{
 					Err: warningErr,
@@ -95,16 +100,8 @@ func (grpcRoute *grpcRouteDescription) GetParentRefs() []gwv1.ParentReference {
 	return grpcRoute.route.Spec.ParentRefs
 }
 
-func (grpcRoute *grpcRouteDescription) GetRouteKind() RouteKind {
-	return GRPCRouteKind
-}
-
-func (grpcRoute *grpcRouteDescription) GetRouteNamespacedName() types.NamespacedName {
-	return k8s.NamespacedName(grpcRoute.route)
-}
-
 func convertGRPCRoute(r gwv1.GRPCRoute) *grpcRouteDescription {
-	return &grpcRouteDescription{route: &r, backendLoader: commonBackendLoader}
+	return &grpcRouteDescription{route: &r, backendLoader: commonBackendLoader, identifier: NewRouteIdentifier(k8s.NamespacedName(&r), GRPCRouteKind)}
 }
 
 func (grpcRoute *grpcRouteDescription) GetRawRoute() interface{} {

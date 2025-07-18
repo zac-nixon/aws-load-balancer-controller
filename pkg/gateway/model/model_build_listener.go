@@ -163,7 +163,7 @@ func (l listenerBuilderImpl) buildL4ListenerSpec(ctx context.Context, stack core
 		return nil, nil
 	}
 	if len(routeDescriptor.GetAttachedRules()[0].GetBackends()) > 1 {
-		return &elbv2model.ListenerSpec{}, errors.Errorf("multiple backend refs found for route %v for listener on port:protocol %v:%v for gateway %v , only one must be specified", routeDescriptor.GetRouteNamespacedName(), port, listenerSpec.Protocol, k8s.NamespacedName(gw))
+		return &elbv2model.ListenerSpec{}, errors.Errorf("multiple backend refs found for route %v for listener on port:protocol %v:%v for gateway %v , only one must be specified", routeDescriptor.GetRouteIdentifier().GetNamespacedName(), port, listenerSpec.Protocol, k8s.NamespacedName(gw))
 	}
 	backend := routeDescriptor.GetAttachedRules()[0].GetBackends()[0]
 	targetGroup, tgErr := l.tgBuilder.buildTargetGroup(stack, gw, lbCfg, lb.Spec.IPAddressType, routeDescriptor, backend, securityGroups.backendSecurityGroupToken)
@@ -186,7 +186,7 @@ func (l listenerBuilderImpl) buildListenerRules(stack core.Stack, ls *elbv2model
 
 		var conditionsList []elbv2model.RuleCondition
 		var err error
-		switch route.GetRouteKind() {
+		switch route.GetRouteIdentifier().GetKind() {
 		case routeutils.HTTPRouteKind:
 			conditionsList, err = routeutils.BuildHttpRuleConditions(ruleWithPrecedence)
 			if err != nil {
@@ -219,7 +219,7 @@ func (l listenerBuilderImpl) buildListenerRules(stack core.Stack, ls *elbv2model
 		}
 
 		// configure actions based on filters
-		switch route.GetRouteKind() {
+		switch route.GetRouteIdentifier().GetKind() {
 		case routeutils.HTTPRouteKind:
 			httpRule := rule.GetRawRouteRule().(*gwv1.HTTPRouteRule)
 			if len(httpRule.Filters) > 0 {

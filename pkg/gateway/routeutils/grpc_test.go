@@ -92,9 +92,9 @@ func Test_ListGRPCRoutes(t *testing.T) {
 
 	itemMap := make(map[string]string)
 	for _, v := range result {
-		routeNsn := v.GetRouteNamespacedName()
+		routeNsn := v.GetRouteIdentifier().GetNamespacedName()
 		itemMap[routeNsn.Namespace] = routeNsn.Name
-		assert.Equal(t, GRPCRouteKind, v.GetRouteKind())
+		assert.Equal(t, GRPCRouteKind, v.GetRouteIdentifier().kind)
 		assert.NotNil(t, v.GetRawRoute())
 
 		if routeNsn.Name == "foo1" {

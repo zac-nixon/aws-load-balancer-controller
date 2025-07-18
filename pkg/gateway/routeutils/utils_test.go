@@ -27,16 +27,11 @@ type mockPreLoadRouteDescriptor struct {
 	namespacedName types.NamespacedName
 }
 
+func (m mockPreLoadRouteDescriptor) GetRouteIdentifier() RouteIdentifier {
+	return NewRouteIdentifier(m.namespacedName, HTTPRouteKind)
+}
+
 func (m mockPreLoadRouteDescriptor) GetAttachedRules() []RouteRule {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m mockPreLoadRouteDescriptor) GetRouteNamespacedName() types.NamespacedName {
-	return m.namespacedName
-}
-
-func (m mockPreLoadRouteDescriptor) GetRouteKind() RouteKind {
 	//TODO implement me
 	panic("implement me")
 }

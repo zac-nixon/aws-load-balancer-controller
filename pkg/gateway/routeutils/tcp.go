@@ -47,9 +47,14 @@ func (t *convertedTCPRouteRule) GetBackends() []Backend {
 /* Route Description */
 
 type tcpRouteDescription struct {
+	identifier    RouteIdentifier
 	route         *gwalpha2.TCPRoute
 	rules         []RouteRule
 	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error, error)
+}
+
+func (tcpRoute *tcpRouteDescription) GetRouteIdentifier() RouteIdentifier {
+	return tcpRoute.identifier
 }
 
 func (tcpRoute *tcpRouteDescription) GetAttachedRules() []RouteRule {
@@ -64,7 +69,7 @@ func (tcpRoute *tcpRouteDescription) loadAttachedRules(ctx context.Context, k8sC
 		convertedBackends := make([]Backend, 0)
 
 		for _, backend := range rule.BackendRefs {
-			convertedBackend, warningErr, fatalErr := tcpRoute.backendLoader(ctx, k8sClient, backend, backend, tcpRoute.GetRouteNamespacedName(), tcpRoute.GetRouteKind())
+			convertedBackend, warningErr, fatalErr := tcpRoute.backendLoader(ctx, k8sClient, backend, backend, tcpRoute.GetRouteIdentifier().GetNamespacedName(), tcpRoute.GetRouteIdentifier().GetKind())
 			if warningErr != nil {
 				allErrors = append(allErrors, routeLoadError{
 					Err: warningErr,
@@ -93,16 +98,8 @@ func (tcpRoute *tcpRouteDescription) GetHostnames() []gwv1.Hostname {
 	return []gwv1.Hostname{}
 }
 
-func (tcpRoute *tcpRouteDescription) GetRouteKind() RouteKind {
-	return TCPRouteKind
-}
-
-func (tcpRoute *tcpRouteDescription) GetRouteNamespacedName() types.NamespacedName {
-	return k8s.NamespacedName(tcpRoute.route)
-}
-
 func convertTCPRoute(r gwalpha2.TCPRoute) *tcpRouteDescription {
-	return &tcpRouteDescription{route: &r, backendLoader: commonBackendLoader}
+	return &tcpRouteDescription{route: &r, backendLoader: commonBackendLoader, identifier: NewRouteIdentifier(k8s.NamespacedName(&r), TCPRouteKind)}
 }
 
 func (tcpRoute *tcpRouteDescription) GetRawRoute() interface{} {

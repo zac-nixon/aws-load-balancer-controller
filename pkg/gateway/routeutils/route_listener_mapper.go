@@ -37,7 +37,7 @@ func (ltr *listenerToRouteMapperImpl) mapGatewayAndRoutes(ctx context.Context, g
 	routesForGateway := make([]preLoadRouteDescriptor, 0)
 	for _, route := range routes {
 		allowsAttachment := ltr.routeAttachmentHelper.doesRouteAttachToGateway(gw, route)
-		ltr.logger.V(1).Info("Route is eligible for attachment", "route", route.GetRouteNamespacedName(), "allowed attachment", allowsAttachment)
+		ltr.logger.V(1).Info("Route is eligible for attachment", "route", route.GetRouteIdentifier().GetNamespacedName(), "allowed attachment", allowsAttachment)
 		if allowsAttachment {
 			routesForGateway = append(routesForGateway, route)
 		}
@@ -59,7 +59,7 @@ func (ltr *listenerToRouteMapperImpl) mapGatewayAndRoutes(ctx context.Context, g
 				return nil, err
 			}
 
-			ltr.logger.V(1).Info("lister allows attachment", "route", route.GetRouteNamespacedName(), "allowedAttachment", allowedAttachment)
+			ltr.logger.V(1).Info("lister allows attachment", "route", route.GetRouteIdentifier().GetNamespacedName(), "allowedAttachment", allowedAttachment)
 			if allowedAttachment {
 				result[int(listener.Port)] = append(result[int(listener.Port)], route)
 			}

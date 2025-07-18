@@ -34,6 +34,8 @@ func newListenerAttachmentHelper(k8sClient client.Client, logger logr.Logger) li
 // listenerAllowsAttachment utility method to determine if a listener will allow a route to connect using
 // Gateway API rules to determine compatibility between lister and route.
 func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor, deferredRouteReconciler RouteReconciler) (bool, error) {
+
+	routeId := route.GetRouteIdentifier()
 	// check namespace
 	namespaceOK, err := attachmentHelper.namespaceCheck(ctx, gw, listener, route)
 	if err != nil {
@@ -41,7 +43,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(c
 	}
 	if !namespaceOK {
 		deferredRouteReconciler.Enqueue(
-			GenerateRouteData(false, true, string(gwv1.RouteReasonNotAllowedByListeners), RouteStatusInfoRejectedMessageNamespaceNotMatch, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw),
+			GenerateRouteData(false, true, string(gwv1.RouteReasonNotAllowedByListeners), RouteStatusInfoRejectedMessageNamespaceNotMatch, routeId.GetNamespacedName(), routeId.GetKind(), route.GetRouteGeneration(), gw),
 		)
 
 		return false, nil
@@ -51,13 +53,13 @@ func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(c
 	kindOK := attachmentHelper.kindCheck(listener, route)
 	if !kindOK {
 		deferredRouteReconciler.Enqueue(
-			GenerateRouteData(false, true, string(gwv1.RouteReasonNotAllowedByListeners), RouteStatusInfoRejectedMessageKindNotMatch, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw),
+			GenerateRouteData(false, true, string(gwv1.RouteReasonNotAllowedByListeners), RouteStatusInfoRejectedMessageKindNotMatch, routeId.GetNamespacedName(), routeId.GetKind(), route.GetRouteGeneration(), gw),
 		)
 		return false, nil
 	}
 
 	// check hostname
-	if (route.GetRouteKind() == HTTPRouteKind || route.GetRouteKind() == GRPCRouteKind || route.GetRouteKind() == TLSRouteKind) && route.GetHostnames() != nil {
+	if (routeId.GetKind() == HTTPRouteKind || routeId.GetKind() == GRPCRouteKind || routeId.GetKind() == TLSRouteKind) && route.GetHostnames() != nil {
 		hostnameOK, err := attachmentHelper.hostnameCheck(listener, route)
 		if err != nil {
 			return false, err
@@ -65,7 +67,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) listenerAllowsAttachment(c
 		if !hostnameOK {
 			// hostname is not ok, print out gwName and gwNamespace test-gw-alb gateway-alb
 			deferredRouteReconciler.Enqueue(
-				GenerateRouteData(false, true, string(gwv1.RouteReasonNoMatchingListenerHostname), RouteStatusInfoRejectedMessageNoMatchingHostname, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw),
+				GenerateRouteData(false, true, string(gwv1.RouteReasonNoMatchingListenerHostname), RouteStatusInfoRejectedMessageNoMatchingHostname, routeId.GetNamespacedName(), routeId.GetKind(), route.GetRouteGeneration(), gw),
 			)
 			return false, nil
 		}
@@ -85,7 +87,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) namespaceCheck(ctx context
 		allowedNamespaces = *listener.AllowedRoutes.Namespaces.From
 	}
 
-	namespacedName := route.GetRouteNamespacedName()
+	namespacedName := route.GetRouteIdentifier().GetNamespacedName()
 
 	switch allowedNamespaces {
 	case gwv1.NamespacesFromSame:
@@ -135,7 +137,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) kindCheck(listener gwv1.Li
 		}
 	}
 
-	isAllowed := allowedRoutes.Has(route.GetRouteKind())
+	isAllowed := allowedRoutes.Has(route.GetRouteIdentifier().GetKind())
 
 	if !isAllowed {
 		return false
@@ -148,7 +150,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) kindCheck(listener gwv1.Li
 		if listener.TLS != nil && listener.TLS.Mode != nil {
 			tlsMode = listener.TLS.Mode
 		}
-		switch route.GetRouteKind() {
+		switch route.GetRouteIdentifier().GetKind() {
 		case TCPRouteKind:
 			// Listener must allow termination at lb
 			return tlsMode == nil || *tlsMode == gwv1.TLSModeTerminate
@@ -188,7 +190,7 @@ func (attachmentHelper *listenerAttachmentHelperImpl) hostnameCheck(listener gwv
 		// validate route hostname, skip invalid hostname
 		isHostnameValid, err := IsHostNameInValidFormat(string(hostname))
 		if err != nil || !isHostnameValid {
-			attachmentHelper.logger.V(1).Info("route hostname is not valid, continue...", "route", route.GetRouteNamespacedName(), "hostname", hostname)
+			attachmentHelper.logger.V(1).Info("route hostname is not valid, continue...", "route", route.GetRouteIdentifier().GetNamespacedName(), "hostname", hostname)
 			continue
 		}
 

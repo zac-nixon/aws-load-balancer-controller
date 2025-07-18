@@ -47,9 +47,14 @@ func (t *convertedTLSRouteRule) GetBackends() []Backend {
 /* Route Description */
 
 type tlsRouteDescription struct {
+	identifier    RouteIdentifier
 	route         *gwalpha2.TLSRoute
 	rules         []RouteRule
 	backendLoader func(ctx context.Context, k8sClient client.Client, typeSpecificBackend interface{}, backendRef gwv1.BackendRef, routeIdentifier types.NamespacedName, routeKind RouteKind) (*Backend, error, error)
+}
+
+func (tlsRoute *tlsRouteDescription) GetRouteIdentifier() RouteIdentifier {
+	return tlsRoute.identifier
 }
 
 func (tlsRoute *tlsRouteDescription) GetAttachedRules() []RouteRule {
@@ -63,7 +68,7 @@ func (tlsRoute *tlsRouteDescription) loadAttachedRules(ctx context.Context, k8sC
 		convertedBackends := make([]Backend, 0)
 
 		for _, backend := range rule.BackendRefs {
-			convertedBackend, warningErr, fatalErr := tlsRoute.backendLoader(ctx, k8sClient, backend, backend, tlsRoute.GetRouteNamespacedName(), tlsRoute.GetRouteKind())
+			convertedBackend, warningErr, fatalErr := tlsRoute.backendLoader(ctx, k8sClient, backend, backend, tlsRoute.GetRouteIdentifier().GetNamespacedName(), tlsRoute.GetRouteIdentifier().GetKind())
 			if warningErr != nil {
 				allErrors = append(allErrors, routeLoadError{
 					Err: warningErr,
@@ -98,20 +103,12 @@ func (tlsRoute *tlsRouteDescription) GetParentRefs() []gwv1.ParentReference {
 	return tlsRoute.route.Spec.ParentRefs
 }
 
-func (tlsRoute *tlsRouteDescription) GetRouteKind() RouteKind {
-	return TLSRouteKind
-}
-
 func (tlsRoute *tlsRouteDescription) GetRouteGeneration() int64 {
 	return tlsRoute.route.Generation
 }
 
 func convertTLSRoute(r gwalpha2.TLSRoute) *tlsRouteDescription {
-	return &tlsRouteDescription{route: &r, backendLoader: commonBackendLoader}
-}
-
-func (tlsRoute *tlsRouteDescription) GetRouteNamespacedName() types.NamespacedName {
-	return k8s.NamespacedName(tlsRoute.route)
+	return &tlsRouteDescription{route: &r, backendLoader: commonBackendLoader, identifier: NewRouteIdentifier(k8s.NamespacedName(&r), TLSRouteKind)}
 }
 
 func (tlsRoute *tlsRouteDescription) GetRawRoute() interface{} {

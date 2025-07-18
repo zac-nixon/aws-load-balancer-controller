@@ -100,7 +100,7 @@ func (t *targetGroupBuilderImpl) buildTargetGroup(stack core.Stack,
 	gw *gwv1.Gateway, lbConfig elbv2gw.LoadBalancerConfiguration, lbIPType elbv2model.IPAddressType, routeDescriptor routeutils.RouteDescriptor, backend routeutils.Backend, backendSGIDToken core.StringToken) (*elbv2model.TargetGroup, error) {
 
 	targetGroupProps := backend.ELBV2TargetGroupProps
-	tgResID := t.buildTargetGroupResourceID(k8s.NamespacedName(gw), k8s.NamespacedName(backend.Service), routeDescriptor.GetRouteNamespacedName(), routeDescriptor.GetRouteKind(), backend.ServicePort.TargetPort)
+	tgResID := t.buildTargetGroupResourceID(k8s.NamespacedName(gw), k8s.NamespacedName(backend.Service), routeDescriptor.GetRouteIdentifier().GetNamespacedName(), routeDescriptor.GetRouteIdentifier().GetKind(), backend.ServicePort.TargetPort)
 	if tg, exists := t.tgByResID[tgResID]; exists {
 		return tg, nil
 	}
@@ -282,7 +282,7 @@ func (builder *targetGroupBuilderImpl) buildTargetGroupSpec(gw *gwv1.Gateway, ro
 		return elbv2model.TargetGroupSpec{}, err
 	}
 	tgPort := builder.buildTargetGroupPort(targetType, *backend.ServicePort)
-	name := builder.buildTargetGroupName(targetGroupProps, k8s.NamespacedName(gw), route.GetRouteNamespacedName(), route.GetRouteKind(), k8s.NamespacedName(backend.Service), tgPort, targetType, tgProtocol, tgProtocolVersion)
+	name := builder.buildTargetGroupName(targetGroupProps, k8s.NamespacedName(gw), route.GetRouteIdentifier().GetNamespacedName(), route.GetRouteIdentifier().GetKind(), k8s.NamespacedName(backend.Service), tgPort, targetType, tgProtocol, tgProtocolVersion)
 
 	if tgPort == 0 {
 		if targetType == elbv2model.TargetTypeIP {
@@ -419,7 +419,7 @@ func (builder *targetGroupBuilderImpl) buildL4TargetGroupProtocol(targetGroupPro
 }
 
 func (builder *targetGroupBuilderImpl) inferTargetGroupProtocolFromRoute(route routeutils.RouteDescriptor) elbv2model.Protocol {
-	switch route.GetRouteKind() {
+	switch route.GetRouteIdentifier().GetKind() {
 	case routeutils.TCPRouteKind:
 		return elbv2model.ProtocolTCP
 	case routeutils.UDPRouteKind:
@@ -454,7 +454,7 @@ func (builder *targetGroupBuilderImpl) buildTargetGroupProtocolVersion(targetGro
 		return &pv
 	}
 
-	if route.GetRouteKind() == routeutils.GRPCRouteKind {
+	if route.GetRouteIdentifier().GetKind() == routeutils.GRPCRouteKind {
 		return &grpc
 	}
 

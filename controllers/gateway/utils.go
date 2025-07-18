@@ -154,7 +154,7 @@ func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) st
 
 	for _, lr := range listenerRoutes {
 		for _, r := range lr {
-			allRoutes = append(allRoutes, fmt.Sprintf("(%s, %s:%s)", r.GetRouteKind(), r.GetRouteNamespacedName().Namespace, r.GetRouteNamespacedName().Name))
+			allRoutes = append(allRoutes, fmt.Sprintf("(%s)", r.GetRouteIdentifier().String()))
 		}
 	}
 

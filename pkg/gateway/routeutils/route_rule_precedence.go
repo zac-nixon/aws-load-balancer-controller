@@ -31,7 +31,7 @@ func SortAllRulesByPrecedence(routes []RouteDescriptor) []RulePrecedence {
 	var allRoutes []RulePrecedence
 
 	for _, route := range routes {
-		routeNamespacedName := route.GetRouteNamespacedName().String()
+		routeNamespacedName := route.GetRouteIdentifier().GetNamespacedName().String()
 		routeCreateTimestamp := route.GetRouteCreateTimestamp()
 		// get hostname in string array format
 		hostnames := make([]string, len(route.GetHostnames()))

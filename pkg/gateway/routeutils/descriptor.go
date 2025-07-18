@@ -12,14 +12,37 @@ import (
 // These are intentionally meant to be type agnostic;
 // however, consumers can use `GetRawRoute()` to inspect the actual route fields if needed.
 type routeMetadataDescriptor interface {
-	GetRouteNamespacedName() types.NamespacedName
-	GetRouteKind() RouteKind
+	GetRouteIdentifier() RouteIdentifier
 	GetHostnames() []gwv1.Hostname
 	GetParentRefs() []gwv1.ParentReference
 	GetRawRoute() interface{}
 	GetBackendRefs() []gwv1.BackendRef
 	GetRouteGeneration() int64
 	GetRouteCreateTimestamp() time.Time
+}
+
+func NewRouteIdentifier(namespacedName types.NamespacedName, kind RouteKind) RouteIdentifier {
+	return RouteIdentifier{
+		namespacedName: namespacedName,
+		kind:           kind,
+	}
+}
+
+type RouteIdentifier struct {
+	namespacedName types.NamespacedName
+	kind           RouteKind
+}
+
+func (r RouteIdentifier) GetNamespacedName() types.NamespacedName {
+	return r.namespacedName
+}
+
+func (r RouteIdentifier) GetKind() RouteKind {
+	return r.kind
+}
+
+func (r RouteIdentifier) String() string {
+	return string(r.kind) + ":" + r.namespacedName.String()
 }
 
 type routeLoadError struct {
