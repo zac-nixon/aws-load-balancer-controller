@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	elbv2api "sigs.k8s.io/aws-load-balancer-controller/apis/elbv2/v1beta1"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/backend"
 	errmetrics "sigs.k8s.io/aws-load-balancer-controller/pkg/error"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
@@ -45,12 +44,11 @@ type ResourceManager interface {
 }
 
 // NewDefaultResourceManager constructs new defaultResourceManager.
-func NewDefaultResourceManager(k8sClient client.Client, elbv2Client services.ELBV2,
+func NewDefaultResourceManager(k8sClient client.Client, targetsManager TargetsManager,
 	podInfoRepo k8s.PodInfoRepo, networkingManager networking.NetworkingManager,
 	vpcInfoProvider networking.VPCInfoProvider, multiClusterManager MultiClusterManager, metricsCollector lbcmetrics.MetricCollector,
 	vpcID string, failOpenEnabled bool, endpointSliceEnabled bool,
 	eventRecorder record.EventRecorder, logger logr.Logger) *defaultResourceManager {
-	targetsManager := NewCachedTargetsManager(elbv2Client, logger)
 	endpointResolver := backend.NewDefaultEndpointResolver(k8sClient, podInfoRepo, failOpenEnabled, endpointSliceEnabled, logger)
 	return &defaultResourceManager{
 		k8sClient:           k8sClient,
@@ -151,10 +149,12 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 	}
 
 	var endpoints []backend.PodEndpoint
+	var terminatingEndpoints []backend.PodEndpoint
 	var containsPotentialReadyEndpoints bool
 	var err error
 
-	endpoints, containsPotentialReadyEndpoints, err = m.endpointResolver.ResolvePodEndpoints(ctx, svcKey, tgb.Spec.ServiceRef.Port, resolveOpts...)
+	// 1. calculate terminatingEndpoints b/c these are pods that are running their termination gate.
+	endpoints, terminatingEndpoints, containsPotentialReadyEndpoints, err = m.endpointResolver.ResolvePodEndpoints(ctx, svcKey, tgb.Spec.ServiceRef.Port, resolveOpts...)
 
 	if err != nil {
 		if errors.Is(err, backend.ErrNotFound) {
@@ -172,7 +172,8 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 
 	oldCheckPoint := GetTGBReconcileCheckpoint(tgb)
 
-	if !containsPotentialReadyEndpoints && oldCheckPoint == newCheckPoint {
+	// 2. If no pods are terminating, then we can safely bail here on equal checkpoint.
+	if !containsPotentialReadyEndpoints && len(terminatingEndpoints) == 0 && oldCheckPoint == newCheckPoint {
 		tgbScopedLogger.Info("Skipping targetgroupbinding reconcile", "calculated hash", newCheckPoint)
 		return newCheckPoint, oldCheckPoint, true, nil
 	}
@@ -182,16 +183,19 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 		return "", "", false, errmetrics.NewErrorWithMetrics(controllerName, "list_targets_error", err, m.metricsCollector)
 	}
 
-	notDrainingTargets, _ := partitionTargetsByDrainingStatus(targets)
+	// 3. Calculate draining targets to see if we need to re-queue to update TG composition.
+	notDrainingTargets, drainingTargets := partitionTargetsByDrainingStatus(targets)
+	m.logger.Info("Have draining targets?", "draining", len(drainingTargets))
 	matchedEndpointAndTargets, unmatchedEndpoints, unmatchedTargets := matchPodEndpointWithTargets(endpoints, notDrainingTargets)
 
-	needNetworkingRequeue := false
+	needNetworkingRequeue := len(drainingTargets) > 0
 	if err := m.networkingManager.ReconcileForPodEndpoints(ctx, tgb, endpoints); err != nil {
 		tgbScopedLogger.Error(err, "Requesting network requeue due to error from ReconcileForPodEndpoints")
 		m.eventRecorder.Event(tgb, corev1.EventTypeWarning, k8s.TargetGroupBindingEventReasonFailedNetworkReconcile, err.Error())
 		needNetworkingRequeue = true
 	}
 
+	// 4. On draining target we must requeue. TODO - Figure out how to selectively do this for only termination gate enabled tgs
 	preflightNeedFurtherProbe := false
 	for _, endpointAndTarget := range matchedEndpointAndTargets {
 		_, localPreflight := m.calculateReadinessGateTransition(endpointAndTarget.endpoint.Pod, targetHealthCondType, endpointAndTarget.target.TargetHealth)
@@ -222,6 +226,7 @@ func (m *defaultResourceManager) reconcileWithIPTargetType(ctx context.Context, 
 		if err != nil {
 			return "", "", false, errmetrics.NewErrorWithMetrics(controllerName, "deregister_targets_error", err, m.metricsCollector)
 		}
+		containsPotentialReadyEndpoints = true
 	}
 
 	if len(unmatchedEndpoints) > 0 {

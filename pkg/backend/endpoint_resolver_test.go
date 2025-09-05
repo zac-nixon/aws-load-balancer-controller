@@ -1328,7 +1328,7 @@ func Test_defaultEndpointResolver_ResolvePodEndpoints(t *testing.T) {
 				endpointSliceEnabled: tt.fields.endpointSliceEnabled,
 				logger:               logr.New(&log.NullLogSink{}),
 			}
-			got, gotContainsPotentialReadyEndpoints, err := r.ResolvePodEndpoints(ctx, tt.args.svcKey, tt.args.port, tt.args.opts...)
+			got, _, gotContainsPotentialReadyEndpoints, err := r.ResolvePodEndpoints(ctx, tt.args.svcKey, tt.args.port, tt.args.opts...)
 			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			} else {

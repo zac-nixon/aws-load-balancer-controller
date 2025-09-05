@@ -2,6 +2,7 @@ package targetgroupbinding
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sync"
 	"time"
 
@@ -30,6 +31,9 @@ type TargetsManager interface {
 
 	// List Targets from TargetGroup.
 	ListTargets(ctx context.Context, tgb *elbv2api.TargetGroupBinding) ([]TargetInfo, error)
+
+	// IsIPInUse
+	IsIPInUse(string) bool
 }
 
 // NewCachedTargetsManager constructs new cachedTargetsManager
@@ -40,6 +44,8 @@ func NewCachedTargetsManager(elbv2Client services.ELBV2, logger logr.Logger) *ca
 		targetsCacheTTL:            defaultTargetsCacheTTL,
 		registerTargetsChunkSize:   defaultRegisterTargetsChunkSize,
 		deregisterTargetsChunkSize: defaultDeregisterTargetsChunkSize,
+		ipToTgMapping:              make(map[string]sets.Set[string]),
+		tgToIpMapping:              make(map[string]sets.Set[string]),
 		logger:                     logger,
 	}
 }
@@ -66,6 +72,9 @@ type cachedTargetsManager struct {
 	registerTargetsChunkSize int
 	// chunk size for deregisterTargets API call.
 	deregisterTargetsChunkSize int
+
+	ipToTgMapping map[string]sets.Set[string]
+	tgToIpMapping map[string]sets.Set[string]
 
 	logger logr.Logger
 }
@@ -148,6 +157,7 @@ func (m *cachedTargetsManager) ListTargets(ctx context.Context, tgb *elbv2api.Ta
 			return nil, err
 		}
 		targetsCacheItem.targets = refreshedTargets
+		m.updateIpTgMapping(refreshedTargets, tgb.Spec.TargetGroupARN)
 		return cloneTargetInfoSlice(refreshedTargets), nil
 	}
 
@@ -160,6 +170,7 @@ func (m *cachedTargetsManager) ListTargets(ctx context.Context, tgb *elbv2api.Ta
 		targets: refreshedTargets,
 	}
 	m.targetsCache.Set(tgARN, targetsCacheItem, m.targetsCacheTTL)
+	m.updateIpTgMapping(refreshedTargets, tgb.Spec.TargetGroupARN)
 	return cloneTargetInfoSlice(refreshedTargets), nil
 }
 
@@ -261,10 +272,12 @@ func (m *cachedTargetsManager) recordSuccessfulRegisterTargetsOperation(tgARN st
 			TargetHealth: nil,
 		})
 	}
+	m.updateIpTgMapping(targetsCacheItem.targets, tgARN)
 }
 
 // recordSuccessfulDeregisterTargetsOperation will record a successful deregisterTarget operation
 func (m *cachedTargetsManager) recordSuccessfulDeregisterTargetsOperation(tgARN string, targets []elbv2types.TargetDescription) {
+
 	m.targetsCacheMutex.RLock()
 	rawTargetsCacheItem, exists := m.targetsCache.Get(tgARN)
 	m.targetsCacheMutex.RUnlock()
@@ -283,10 +296,74 @@ func (m *cachedTargetsManager) recordSuccessfulDeregisterTargetsOperation(tgARN 
 	for i := range targetsCacheItem.targets {
 		cachedTargetUniqueID := UniqueIDForTargetDescription(targetsCacheItem.targets[i].Target)
 		if _, ok := targetsByUniqueID[cachedTargetUniqueID]; ok {
-			targetsCacheItem.targets[i].TargetHealth = nil
-			delete(targetsByUniqueID, cachedTargetUniqueID)
+			targetsCacheItem.targets[i].TargetHealth = &elbv2types.TargetHealth{
+				State: elbv2types.TargetHealthStateEnumDraining,
+			}
 		}
 	}
+}
+
+func (m *cachedTargetsManager) updateIpTgMapping(newTargets []TargetInfo, arn string) {
+	// todo this is really bad revisit asap
+
+	vs, ok := m.tgToIpMapping[arn]
+
+	if ok {
+
+		emptyIps := make([]string, 0)
+		// Remove old ip -> arn mapping
+		for _, ip := range vs.UnsortedList() {
+			m.ipToTgMapping[ip].Delete(arn)
+			if m.ipToTgMapping[ip].Len() == 0 {
+				emptyIps = append(emptyIps, ip)
+			}
+		}
+
+		// Remove arn mapping
+		delete(m.tgToIpMapping, arn)
+
+		for _, ei := range emptyIps {
+			delete(m.ipToTgMapping, ei)
+		}
+	}
+
+	newVs := sets.New[string]()
+	for _, newTarget := range newTargets {
+		ip := *newTarget.Target.Id
+		newVs.Insert(*newTarget.Target.Id)
+
+		ec := m.ipToTgMapping[ip]
+		if ec == nil {
+			ec = sets.New[string]()
+			m.ipToTgMapping[ip] = ec
+		}
+		m.ipToTgMapping[ip].Insert(arn)
+	}
+
+	m.tgToIpMapping[arn] = newVs
+}
+
+func (m *cachedTargetsManager) IsIPInUse(ip string) bool {
+	// TODO (bad perhaps)
+	m.targetsCacheMutex.RLock()
+	defer m.targetsCacheMutex.RUnlock()
+	tgs, ok := m.ipToTgMapping[ip]
+	if !ok {
+		return false
+	}
+
+	for _, tg := range tgs.UnsortedList() {
+		tgComp := m.tgToIpMapping[tg]
+		if tgComp == nil {
+			continue
+		}
+		if tgComp.Has(ip) {
+			m.logger.Info("Got IP in tg", "ip", ip, "tg", tg)
+			return true
+		}
+	}
+
+	return false
 }
 
 // chunkTargetDescriptions will split slice of TargetDescription into chunks

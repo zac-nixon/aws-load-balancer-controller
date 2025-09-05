@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"log"
+	"net/http"
 	"os"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/controllers/gateway"
@@ -27,6 +29,7 @@ import (
 	gateway_constants "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/referencecounter"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/termination"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -178,7 +181,8 @@ func main() {
 
 	networkingManager := networking.NewDefaultNetworkingManager(mgr.GetClient(), podENIResolver, nodeENIResolver, sgManager, sgReconciler, cloud.VpcID(), controllerCFG.ClusterName, controllerCFG.ServiceTargetENISGTags, ctrl.Log, controllerCFG.DisableRestrictedSGRules)
 
-	tgbResManager := targetgroupbinding.NewDefaultResourceManager(mgr.GetClient(), cloud.ELBV2(),
+	targetsManager := targetgroupbinding.NewCachedTargetsManager(cloud.ELBV2(), ctrl.Log)
+	tgbResManager := targetgroupbinding.NewDefaultResourceManager(mgr.GetClient(), targetsManager,
 		podInfoRepo, networkingManager, vpcInfoProvider, multiClusterManager, lbcMetricsCollector,
 		cloud.VpcID(), controllerCFG.FeatureGates.Enabled(config.EndpointsFailOpen), controllerCFG.EnableEndpointSlices,
 		mgr.GetEventRecorderFor("targetGroupBinding"), ctrl.Log)
@@ -419,6 +423,11 @@ func main() {
 	go func() {
 		setupLog.Info("starting collect top talkers")
 		lbcMetricsCollector.StartCollectTopTalkers(ctx)
+	}()
+
+	go func() {
+		http.Handle("/terminationGate", termination.NewTerminationHandler(mgr.GetClient(), targetsManager, mgr.GetLogger()))
+		log.Fatal(http.ListenAndServe(":1234", nil))
 	}()
 
 	if err := mgr.Start(ctx); err != nil {

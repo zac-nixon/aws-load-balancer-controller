@@ -28,7 +28,7 @@ type EndpointResolver interface {
 	// ResolvePodEndpoints will resolve endpoints backed by pods directly.
 	// returns resolved podEndpoints and whether there are unready endpoints that can potentially turn ready in future reconciles.
 	ResolvePodEndpoints(ctx context.Context, svcKey types.NamespacedName, port intstr.IntOrString,
-		opts ...EndpointResolveOption) ([]PodEndpoint, bool, error)
+		opts ...EndpointResolveOption) ([]PodEndpoint, []PodEndpoint, bool, error)
 
 	// ResolveNodePortEndpoints will resolve endpoints backed by nodePort.
 	ResolveNodePortEndpoints(ctx context.Context, svcKey types.NamespacedName, port intstr.IntOrString,
@@ -60,17 +60,17 @@ type defaultEndpointResolver struct {
 	logger               logr.Logger
 }
 
-func (r *defaultEndpointResolver) ResolvePodEndpoints(ctx context.Context, svcKey types.NamespacedName, port intstr.IntOrString, opts ...EndpointResolveOption) ([]PodEndpoint, bool, error) {
+func (r *defaultEndpointResolver) ResolvePodEndpoints(ctx context.Context, svcKey types.NamespacedName, port intstr.IntOrString, opts ...EndpointResolveOption) ([]PodEndpoint, []PodEndpoint, bool, error) {
 	resolveOpts := defaultEndpointResolveOptions()
 	resolveOpts.ApplyOptions(opts)
 
 	_, svcPort, err := r.findServiceAndServicePort(ctx, svcKey, port)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	endpointsDataList, err := r.computeServiceEndpointsData(ctx, svcKey)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	return r.resolvePodEndpointsWithEndpointsData(ctx, svcKey, svcPort, endpointsDataList, resolveOpts.PodReadinessGates)
 }
@@ -140,9 +140,10 @@ func (r *defaultEndpointResolver) computeServiceEndpointsData(ctx context.Contex
 	return endpointsDataList, nil
 }
 
-func (r *defaultEndpointResolver) resolvePodEndpointsWithEndpointsData(ctx context.Context, svcKey types.NamespacedName, svcPort corev1.ServicePort, endpointsDataList []EndpointsData, podReadinessGates []corev1.PodConditionType) ([]PodEndpoint, bool, error) {
+func (r *defaultEndpointResolver) resolvePodEndpointsWithEndpointsData(ctx context.Context, svcKey types.NamespacedName, svcPort corev1.ServicePort, endpointsDataList []EndpointsData, podReadinessGates []corev1.PodConditionType) ([]PodEndpoint, []PodEndpoint, bool, error) {
 	var readyPodEndpoints []PodEndpoint
 	var unknownPodEndpoints []PodEndpoint
+	var terminatingPodEndpoints []PodEndpoint
 	containsPotentialReadyEndpoints := false
 
 	for _, epsData := range endpointsDataList {
@@ -167,7 +168,7 @@ func (r *defaultEndpointResolver) resolvePodEndpointsWithEndpointsData(ctx conte
 				podKey := types.NamespacedName{Namespace: podNamespace, Name: ep.TargetRef.Name}
 				pod, exists, err := r.podInfoRepo.Get(ctx, podKey)
 				if err != nil {
-					return nil, false, err
+					return nil, nil, false, err
 				}
 				if !exists {
 					r.logger.Info("the pod in endpoint is not found in pod cache yet, will keep retrying", "podKey", podKey.String())
@@ -205,6 +206,8 @@ func (r *defaultEndpointResolver) resolvePodEndpointsWithEndpointsData(ctx conte
 					// and we don't want to include these pods if the node is known to be healthy.
 					if ep.Conditions.Terminating == nil || !*ep.Conditions.Terminating {
 						readyPodEndpoints = append(readyPodEndpoints, podEndpoint)
+					} else {
+						terminatingPodEndpoints = append(terminatingPodEndpoints, podEndpoint)
 					}
 				case corev1.ConditionUnknown:
 					unknownPodEndpoints = append(unknownPodEndpoints, podEndpoint)
@@ -216,7 +219,8 @@ func (r *defaultEndpointResolver) resolvePodEndpointsWithEndpointsData(ctx conte
 	if r.failOpenEnabled && len(podEndpoints) == 0 {
 		podEndpoints = unknownPodEndpoints
 	}
-	return podEndpoints, containsPotentialReadyEndpoints, nil
+	terminatingPodEndpoints = append(terminatingPodEndpoints, unknownPodEndpoints...)
+	return podEndpoints, terminatingPodEndpoints, containsPotentialReadyEndpoints, nil
 }
 
 func (r *defaultEndpointResolver) findServiceAndServicePort(ctx context.Context, svcKey types.NamespacedName, port intstr.IntOrString) (*corev1.Service, corev1.ServicePort, error) {
