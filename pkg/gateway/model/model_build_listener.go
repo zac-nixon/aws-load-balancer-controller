@@ -266,6 +266,14 @@ func (l listenerBuilderImpl) buildListenerRules(ctx context.Context, stack core.
 			actions = append(actions, *ruleRoutingAction)
 		}
 
+		var transforms []elbv2model.Transform
+
+		transforms, err = routeutils.BuildRoutingRuleTransforms(route, ruleWithPrecedence)
+
+		if err != nil {
+			return nil, err
+		}
+
 		tags, tagsErr := l.tagHelper.getGatewayTags(lbCfg)
 		if tagsErr != nil {
 			return nil, tagsErr
@@ -274,6 +282,7 @@ func (l listenerBuilderImpl) buildListenerRules(ctx context.Context, stack core.
 		albRules = append(albRules, elbv2model.Rule{
 			Conditions: conditionsList,
 			Actions:    actions,
+			Transforms: transforms,
 			Tags:       tags,
 		})
 
@@ -287,6 +296,7 @@ func (l listenerBuilderImpl) buildListenerRules(ctx context.Context, stack core.
 			Priority:    priority,
 			Conditions:  rule.Conditions,
 			Actions:     rule.Actions,
+			Transforms:  rule.Transforms,
 			Tags:        rule.Tags,
 		})
 		priority += 1

@@ -57,6 +57,27 @@ type ListenerRuleCondition struct {
 	MatchIndexes *[]int `json:"matchIndexes,omitempty"`
 }
 
+// Transforms modify the HTTP request, via changing the Host Header or Path and Query elements.
+type Transforms struct {
+	// Changes to apply to the host header
+	// +optional
+	HostHeaderRewrites *[]TransformPair `json:"hostHeaderRewrites,omitempty"`
+
+	// Changes to apply to the path and query parameters.
+	// +optional
+	PathRewrites *[]TransformPair `json:"pathRewrites,omitempty"`
+
+	// Indexes of Match in a rule to apply source ip to
+	// If MatchIndexes is not provided, Each transform will be applied to each matched request.
+	// +optional
+	MatchIndexes *[]int `json:"matchIndexes,omitempty"`
+}
+
+type TransformPair struct {
+	Regex       string `json:"regex"`
+	Replacement string `json:"replacement"`
+}
+
 // ActionType defines the type of action for the rule
 // +kubebuilder:validation:Enum=forward;fixed-response;redirect;authenticate-cognito;authenticate-oidc
 type ActionType string
@@ -289,6 +310,13 @@ type ListenerRuleConfigurationSpec struct {
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	Conditions []ListenerRuleCondition `json:"conditions,omitempty"`
+
+	// Transforms defines modification to apply to incoming requests.
+	// This is used to extend the URLRewrite capability defined in HTTPRoutes
+	// Use these transforms for rich transformation logic using Regular Expressions.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	Transforms []Transforms `json:"transforms,omitempty"`
 
 	// Tags are the AWS resource tags to be applied to all AWS resources created for this rule.
 	// +optional
