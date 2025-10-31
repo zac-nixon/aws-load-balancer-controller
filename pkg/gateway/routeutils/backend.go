@@ -3,6 +3,9 @@ package routeutils
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -19,29 +22,31 @@ import (
 
 const (
 	serviceKind             = "Service"
+	gatewayKind             = "Gateway"
 	referenceGrantNotExists = "No explicit ReferenceGrant exists to allow the reference."
 	maxWeight               = 999
 )
+
+type BackendTargetGroupConfigurator interface {
+	GetBackendObjectNamespacedName() types.NamespacedName
+	GetTargetGroupProps() *elbv2gw.TargetGroupProps
+	GetTargetType(defaultType elbv2model.TargetType) elbv2model.TargetType
+	GetExternalTrafficPolicy() string
+	GetIPAddressType() elbv2model.TargetGroupIPAddressType
+	GetDataPort(targetType elbv2model.TargetType) int32
+	GetHealthCheckPort(targetType elbv2model.TargetType, isServiceExternalTrafficPolicyTypeLocal bool) (intstr.IntOrString, error)
+}
 
 var (
 	tgConfigConstructor = gateway.NewTargetGroupConfigConstructor()
 )
 
-type ServiceBackendConfig struct {
-	Service               *corev1.Service
-	ELBV2TargetGroupProps *elbv2gw.TargetGroupProps
-	ServicePort           *corev1.ServicePort
-}
-
-type LiteralTargetGroupConfig struct {
-	// GW API limits names to 253 characters, while a TG ARN might be 256, so just using the name.
-	Name string
-}
-
 // Backend an abstraction on the Gateway Backend, meant to hide the underlying backend type from consumers (unless they really want to see it :))
 type Backend struct {
+	// There should be only _1_ Backend config!
 	ServiceBackend     *ServiceBackendConfig
 	LiteralTargetGroup *LiteralTargetGroupConfig
+	GatewayBackend     *GatewayBackendConfig
 	Weight             int
 }
 
@@ -117,20 +122,23 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, backendRe
 
 	var serviceBackend *ServiceBackendConfig
 	var literalTargetGroup *LiteralTargetGroupConfig
+	var gatewayBackend *GatewayBackendConfig
 	var warn error
 	var fatal error
 	// We only support references of type service.
-	if backendRef.Kind == nil || *backendRef.Kind == "Service" {
+	if backendRef.Kind == nil || *backendRef.Kind == serviceKind {
 		serviceBackend, warn, fatal = serviceLoader(ctx, k8sClient, routeIdentifier, routeKind, backendRef)
 	} else if string(*backendRef.Kind) == TargetGroupNameBackend {
 		literalTargetGroup, warn, fatal = literalTargetGroupLoader(backendRef)
+	} else if string(*backendRef.Kind) == gatewayKind {
+		gatewayBackend, warn, fatal = gatewayLoader(ctx, k8sClient, routeIdentifier, routeKind, backendRef)
 	}
 
 	if warn != nil || fatal != nil {
 		return nil, warn, fatal
 	}
 
-	if serviceBackend == nil && literalTargetGroup == nil {
+	if serviceBackend == nil && literalTargetGroup == nil && gatewayBackend == nil {
 		initialErrorMessage := "Unknown backend reference kind"
 		wrappedGatewayErrorMessage := generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)
 		return nil, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid, gwv1.RouteReasonInvalidKind, &wrappedGatewayErrorMessage, nil), nil
@@ -158,6 +166,7 @@ func commonBackendLoader(ctx context.Context, k8sClient client.Client, backendRe
 	return &Backend{
 		ServiceBackend:     serviceBackend,
 		LiteralTargetGroup: literalTargetGroup,
+		GatewayBackend:     gatewayBackend,
 		Weight:             weight,
 	}, nil, nil
 }
@@ -271,15 +280,82 @@ func serviceLoader(ctx context.Context, k8sClient client.Client, routeIdentifier
 	}
 
 	return &ServiceBackendConfig{
-		Service:               svc,
-		ServicePort:           servicePort,
-		ELBV2TargetGroupProps: tgProps,
+		Service:          svc,
+		ServicePort:      servicePort,
+		TargetGroupProps: tgProps,
 	}, nil, nil
 }
 
 func literalTargetGroupLoader(backendRef gwv1.BackendRef) (*LiteralTargetGroupConfig, error, error) {
 	return &LiteralTargetGroupConfig{
 		Name: string(backendRef.Name),
+	}, nil, nil
+}
+
+func gatewayLoader(ctx context.Context, k8sClient client.Client, routeIdentifier types.NamespacedName, routeKind RouteKind, backendRef gwv1.BackendRef) (*GatewayBackendConfig, error, error) {
+	if routeKind != TCPRouteKind {
+		initialErrorMessage := "Gateway Backend is only supported for TCPRoutes"
+		wrappedGatewayErrorMessage := generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)
+		return nil, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid, gwv1.RouteReasonUnsupportedValue, &wrappedGatewayErrorMessage, nil), nil
+	}
+
+	if backendRef.Port == nil {
+		initialErrorMessage := "Port is required"
+		wrappedGatewayErrorMessage := generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)
+		return nil, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid, gwv1.RouteReasonUnsupportedValue, &wrappedGatewayErrorMessage, nil), nil
+	}
+
+	var gwNamespace string
+	if backendRef.Namespace == nil {
+		gwNamespace = routeIdentifier.Namespace
+	} else {
+		gwNamespace = string(*backendRef.Namespace)
+	}
+
+	gwIdentifier := types.NamespacedName{
+		Namespace: gwNamespace,
+		Name:      string(backendRef.Name),
+	}
+
+	gw := &gwv1.Gateway{}
+	err := k8sClient.Get(ctx, gwIdentifier, gw)
+	if err != nil {
+		convertToNotFoundError := client.IgnoreNotFound(err)
+
+		if convertToNotFoundError == nil {
+			// gw not found, post an updated status.
+			initialErrorMessage := fmt.Sprintf("Gateway (%s:%s) not found)", gwIdentifier.Namespace, gwIdentifier.Name)
+			wrappedGatewayErrorMessage := generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)
+			return nil, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid, gwv1.RouteReasonBackendNotFound, &wrappedGatewayErrorMessage, nil), nil
+		}
+		// Otherwise, general error. No need for status update.
+		return nil, nil, errors.Wrap(err, fmt.Sprintf("Unable to fetch gw object %+v", gwIdentifier))
+	}
+
+	var arn string
+
+	// Find the ALB ARN within the Gateway Programmed Condition, the controller will always embed the ARN there.
+	for _, cond := range gw.Status.Conditions {
+		if cond.Type == string(gwv1.GatewayConditionProgrammed) {
+			if cond.Status == metav1.ConditionTrue {
+				arn = cond.Message
+				break
+			}
+		}
+	}
+
+	if arn == "" {
+		// If the ARN is not available, then the backend is not yet usable.
+		initialErrorMessage := fmt.Sprintf("Gateway (%s:%s) is not usable yet, LB ARN is not provisioned)", gwIdentifier.Namespace, gwIdentifier.Name)
+		wrappedGatewayErrorMessage := generateInvalidMessageWithRouteDetails(initialErrorMessage, routeKind, routeIdentifier)
+		return nil, wrapError(errors.Errorf("%s", initialErrorMessage), gwv1.GatewayReasonListenersNotValid, gwv1.RouteReasonBackendNotFound, &wrappedGatewayErrorMessage, nil), nil
+	}
+
+	return &GatewayBackendConfig{
+		gateway:          gw,
+		arn:              arn,
+		port:             int(*backendRef.Port),
+		targetGroupProps: nil,
 	}, nil, nil
 }
 

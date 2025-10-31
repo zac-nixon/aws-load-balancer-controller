@@ -313,7 +313,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 
 			builder := newTargetGroupBuilder("my-cluster", "vpc-xxx", tagger, tc.lbType, &mockTargetGroupBindingNetworkingBuilder{}, gateway.NewTargetGroupConfigConstructor(), tc.defaultTargetType, nil)
 
-			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(tc.gateway, tc.route, elbv2gw.LoadBalancerConfiguration{}, elbv2model.IPAddressTypeIPV4, tc.backend, nil)
+			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(tc.gateway, tc.route, elbv2model.IPAddressTypeIPV4, &tc.backend, nil)
 			if tc.expectErr {
 				assert.Error(t, err)
 				return
@@ -754,7 +754,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 
 			builder := newTargetGroupBuilder("my-cluster", "vpc-xxx", tagger, tc.lbType, &mockTargetGroupBindingNetworkingBuilder{}, gateway.NewTargetGroupConfigConstructor(), tc.defaultTargetType, nil)
 
-			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupBindingSpec(tc.gateway, nil, tc.expectedTgSpec, nil, tc.backend)
+			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupBindingSpec(tc.gateway, nil, tc.expectedTgSpec, nil, &tc.backend)
 
 			assert.Equal(t, tc.expectedTgBindingSpec, out)
 			assert.NoError(t, err)
@@ -832,136 +832,6 @@ func Test_buildTargetGroupTargetType(t *testing.T) {
 		TargetType: &inst,
 	})
 	assert.Equal(t, elbv2model.TargetTypeInstance, res)
-}
-
-func Test_buildTargetGroupIPAddressType(t *testing.T) {
-	testCases := []struct {
-		name                      string
-		svc                       *corev1.Service
-		loadBalancerIPAddressType elbv2model.IPAddressType
-		expectErr                 bool
-		expected                  elbv2model.TargetGroupIPAddressType
-	}{
-		{
-			name:                      "no ip families",
-			svc:                       &corev1.Service{},
-			loadBalancerIPAddressType: elbv2model.IPAddressTypeIPV4,
-			expected:                  elbv2model.TargetGroupIPAddressTypeIPv4,
-		},
-		{
-			name: "ipv4 family",
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					IPFamilies: []corev1.IPFamily{
-						corev1.IPv4Protocol,
-					},
-				},
-			},
-			loadBalancerIPAddressType: elbv2model.IPAddressTypeIPV4,
-			expected:                  elbv2model.TargetGroupIPAddressTypeIPv4,
-		},
-		{
-			name: "ipv6 family",
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					IPFamilies: []corev1.IPFamily{
-						corev1.IPv6Protocol,
-					},
-				},
-			},
-			loadBalancerIPAddressType: elbv2model.IPAddressTypeDualStack,
-			expected:                  elbv2model.TargetGroupIPAddressTypeIPv6,
-		},
-		{
-			name: "ipv6 family - dual stack no ipv4",
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					IPFamilies: []corev1.IPFamily{
-						corev1.IPv6Protocol,
-					},
-				},
-			},
-			loadBalancerIPAddressType: elbv2model.IPAddressTypeDualStackWithoutPublicIPV4,
-			expected:                  elbv2model.TargetGroupIPAddressTypeIPv6,
-		},
-		{
-			name: "ipv6 family - bad lb type",
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					IPFamilies: []corev1.IPFamily{
-						corev1.IPv6Protocol,
-					},
-				},
-			},
-			loadBalancerIPAddressType: elbv2model.IPAddressTypeIPV4,
-			expectErr:                 true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			builder := targetGroupBuilderImpl{}
-			res, err := builder.buildTargetGroupIPAddressType(tc.svc, tc.loadBalancerIPAddressType)
-			if tc.expectErr {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, res)
-
-		})
-	}
-}
-
-func Test_buildTargetGroupPort(t *testing.T) {
-	testCases := []struct {
-		name       string
-		targetType elbv2model.TargetType
-		svcPort    corev1.ServicePort
-		expected   int32
-	}{
-		{
-			name: "instance",
-			svcPort: corev1.ServicePort{
-				NodePort: 8080,
-			},
-			targetType: elbv2model.TargetTypeInstance,
-			expected:   8080,
-		},
-		{
-			name:       "instance - no node port",
-			svcPort:    corev1.ServicePort{},
-			targetType: elbv2model.TargetTypeInstance,
-			expected:   0,
-		},
-		{
-			name: "ip",
-			svcPort: corev1.ServicePort{
-				NodePort:   8080,
-				TargetPort: intstr.FromInt32(80),
-			},
-			targetType: elbv2model.TargetTypeIP,
-			expected:   80,
-		},
-		{
-			name: "ip - str port",
-			svcPort: corev1.ServicePort{
-				NodePort:   8080,
-				TargetPort: intstr.FromString("foo"),
-			},
-			targetType: elbv2model.TargetTypeIP,
-			expected:   1,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			builder := targetGroupBuilderImpl{}
-			res := builder.buildTargetGroupPort(tc.targetType, tc.svcPort)
-			assert.Equal(t, tc.expected, res)
-
-		})
-	}
 }
 
 func Test_buildTargetGroupProtocol(t *testing.T) {
@@ -1239,189 +1109,6 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 				loadBalancerType: tc.loadBalancerType,
 			}
 			res := builder.buildTargetGroupProtocolVersion(tc.targetGroupProps, tc.route)
-			assert.Equal(t, tc.expected, res)
-		})
-	}
-}
-
-func Test_buildTargetGroupHealthCheckPort(t *testing.T) {
-	testCases := []struct {
-		name                                    string
-		isServiceExternalTrafficPolicyTypeLocal bool
-		targetGroupProps                        *elbv2gw.TargetGroupProps
-		targetType                              elbv2model.TargetType
-		svc                                     *corev1.Service
-		expected                                intstr.IntOrString
-		expectErr                               bool
-	}{
-		{
-			name:                                    "nil props",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			expected:                                intstr.FromString(shared_constants.HealthCheckPortTrafficPort),
-		},
-		{
-			name:                                    "nil hc props",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetGroupProps:                        &elbv2gw.TargetGroupProps{},
-			expected:                                intstr.FromString(shared_constants.HealthCheckPortTrafficPort),
-		},
-		{
-			name:                                    "nil hc port",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{},
-			},
-			expected: intstr.FromString(shared_constants.HealthCheckPortTrafficPort),
-		},
-		{
-			name:                                    "explicit is use traffic port hc port",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String(shared_constants.HealthCheckPortTrafficPort),
-				},
-			},
-			expected: intstr.FromString(shared_constants.HealthCheckPortTrafficPort),
-		},
-		{
-			name:                                    "explicit port",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("80"),
-				},
-			},
-			expected: intstr.FromInt32(80),
-		},
-		{
-			name:                                    "resolve str port",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "foo",
-							TargetPort: intstr.FromInt32(80),
-						},
-					},
-				},
-			},
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("foo"),
-				},
-			},
-			expected: intstr.FromInt32(80),
-		},
-		{
-			name:                                    "resolve str port - instance",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetType:                              elbv2model.TargetTypeInstance,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "foo",
-							TargetPort: intstr.FromInt32(80),
-							NodePort:   1000,
-						},
-					},
-				},
-			},
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("foo"),
-				},
-			},
-			expected: intstr.FromInt32(1000),
-		},
-		{
-			name:                                    "resolve str port - resolves to other str port (error)",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "foo",
-							TargetPort: intstr.FromString("bar"),
-							NodePort:   1000,
-						},
-					},
-				},
-			},
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("foo"),
-				},
-			},
-			expectErr: true,
-		},
-		{
-			name:                                    "resolve str port - resolves to other str port but instance mode",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetType:                              elbv2model.TargetTypeInstance,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "foo",
-							TargetPort: intstr.FromString("bar"),
-							NodePort:   1000,
-						},
-					},
-				},
-			},
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("foo"),
-				},
-			},
-			expected: intstr.FromInt32(1000),
-		},
-		{
-			name:                                    "resolve str port - cant find configured port",
-			isServiceExternalTrafficPolicyTypeLocal: false,
-			targetType:                              elbv2model.TargetTypeInstance,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "baz",
-							TargetPort: intstr.FromString("bar"),
-							NodePort:   1000,
-						},
-					},
-				},
-			},
-			targetGroupProps: &elbv2gw.TargetGroupProps{
-				HealthCheckConfig: &elbv2gw.HealthCheckConfiguration{
-					HealthCheckPort: awssdk.String("foo"),
-				},
-			},
-			expectErr: true,
-		},
-		{
-			name:                                    "with ExternalTrafficPolicyTypeLocal and HealthCheckNodePort specified",
-			isServiceExternalTrafficPolicyTypeLocal: true,
-			svc: &corev1.Service{
-				Spec: corev1.ServiceSpec{
-					HealthCheckNodePort:   32000,
-					ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeLocal,
-				},
-			},
-			expected: intstr.FromInt32(32000),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			builder := targetGroupBuilderImpl{}
-			res, err := builder.buildTargetGroupHealthCheckPort(tc.targetGroupProps, tc.targetType, tc.svc, tc.isServiceExternalTrafficPolicyTypeLocal)
-			if tc.expectErr {
-				assert.Error(t, err, res)
-				return
-			}
-			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, res)
 		})
 	}
@@ -1887,7 +1574,7 @@ func Test_buildTargetGroupTags(t *testing.T) {
 				}
 			}
 
-			tgSpec, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(gateway, route, elbv2gw.LoadBalancerConfiguration{}, elbv2model.IPAddressTypeIPV4, backend, tgProps)
+			tgSpec, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(gateway, route, elbv2model.IPAddressTypeIPV4, &backend, tgProps)
 
 			if tc.expectErr {
 				assert.Error(t, err)
