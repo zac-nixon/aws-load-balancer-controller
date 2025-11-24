@@ -177,7 +177,7 @@ func (l listenerBuilderImpl) buildL4ListenerSpec(ctx context.Context, stack core
 		return nil, nil
 	}
 
-	arn, tgErr := l.tgBuilder.buildTargetGroup(stack, gw, port, lb.Spec.IPAddressType, routeDescriptor, backend)
+	arn, tgErr := l.tgBuilder.buildTargetGroup(stack, gw, port, listenerSpec.Protocol, lb.Spec.IPAddressType, routeDescriptor, backend)
 	if tgErr != nil {
 		return &elbv2model.ListenerSpec{}, tgErr
 	}
@@ -222,7 +222,7 @@ func (l listenerBuilderImpl) buildListenerRules(ctx context.Context, stack core.
 		}
 		targetGroupTuples := make([]elbv2model.TargetGroupTuple, 0, len(rule.GetBackends()))
 		for _, backend := range rule.GetBackends() {
-			arn, tgErr := l.tgBuilder.buildTargetGroup(stack, gw, port, ipAddressType, route, backend)
+			arn, tgErr := l.tgBuilder.buildTargetGroup(stack, gw, port, ls.Spec.Protocol, ipAddressType, route, backend)
 			if tgErr != nil {
 				return nil, tgErr
 			}
@@ -492,13 +492,28 @@ func mapGatewayListenerConfigsByPort(gw *gwv1.Gateway, routes map[int32][]routeu
 	gwListenerConfigs := make(map[int32]*gwListenerConfig)
 	for _, listener := range gw.Spec.Listeners {
 		port := int32(listener.Port)
-		protocol := listener.Protocol
-		if gwListenerConfigs[port] != nil && string(gwListenerConfigs[port].protocol) != string(protocol) {
-			return nil, fmt.Errorf("invalid listeners on gateway, listeners with same ports cannot have different protocols")
-		}
+		protocol := elbv2model.Protocol(listener.Protocol)
 		if gwListenerConfigs[port] == nil {
 			gwListenerConfigs[port] = &gwListenerConfig{
-				protocol:  elbv2model.Protocol(protocol),
+				protocol:  protocol,
+				hostnames: sets.New[string](),
+			}
+		}
+
+		if gwListenerConfigs[port] != nil && gwListenerConfigs[port].protocol != protocol {
+			// Special case TCP_UDP (or TCP_QUIC)
+
+			mergedValue, mergeErr := mergeProtocols(gwListenerConfigs[port].protocol, protocol)
+
+			if mergeErr != nil {
+				return nil, fmt.Errorf("invalid listeners on gateway, listeners with same ports cannot have different protocols")
+			}
+
+			// TODO this only works for TCP, UDP route merging.
+			// If we need to support TLS merging, then this will need
+			// to be updated.
+			gwListenerConfigs[port] = &gwListenerConfig{
+				protocol:  mergedValue,
 				hostnames: sets.New[string](),
 			}
 		}
@@ -598,4 +613,20 @@ func getRoutingAction(config *elbv2gw.ListenerRuleConfiguration) *elbv2gw.Action
 		}
 	}
 	return nil
+}
+
+func mergeProtocols(storedProtocol, proposedProtocol elbv2model.Protocol) (elbv2model.Protocol, error) {
+	if storedProtocol == elbv2model.ProtocolTCP_UDP && (proposedProtocol == elbv2model.ProtocolTCP || proposedProtocol == elbv2model.ProtocolUDP) {
+		return elbv2model.ProtocolTCP_UDP, nil
+	}
+
+	if storedProtocol == elbv2model.ProtocolTCP && proposedProtocol == elbv2model.ProtocolUDP {
+		return elbv2model.ProtocolTCP_UDP, nil
+	}
+
+	if storedProtocol == elbv2model.ProtocolUDP && proposedProtocol == elbv2model.ProtocolTCP {
+		return elbv2model.ProtocolTCP_UDP, nil
+	}
+
+	return elbv2model.ProtocolHTTP, errors.New("unsupported merge")
 }

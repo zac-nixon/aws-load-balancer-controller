@@ -317,7 +317,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 
 			builder := newTargetGroupBuilder("my-cluster", "vpc-xxx", tagger, tc.lbType, &mockTargetGroupBindingNetworkingBuilder{}, gateway.NewTargetGroupConfigConstructor(), tc.defaultTargetType, nil)
 
-			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(tc.gateway, tc.route, elbv2model.IPAddressTypeIPV4, tc.backend, nil)
+			out, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(tc.gateway, tc.route, elbv2model.ProtocolHTTP, elbv2model.IPAddressTypeIPV4, tc.backend, nil)
 			if tc.expectErr {
 				assert.Error(t, err)
 				return
@@ -1114,7 +1114,7 @@ func Test_buildTargetGroupProtocol(t *testing.T) {
 			builder := targetGroupBuilderImpl{
 				loadBalancerType: tc.lbType,
 			}
-			res, err := builder.buildTargetGroupProtocol(tc.targetGroupProps, tc.route)
+			res, err := builder.buildTargetGroupProtocol(tc.targetGroupProps, tc.route, elbv2model.ProtocolHTTP)
 			if tc.expectErr {
 				assert.Error(t, err)
 				return
@@ -1658,7 +1658,7 @@ func Test_buildTargetGroupTags(t *testing.T) {
 				}
 			}
 
-			tgSpec, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(gateway, route, elbv2model.IPAddressTypeIPV4, backend, tgProps)
+			tgSpec, err := builder.(*targetGroupBuilderImpl).buildTargetGroupSpec(gateway, route, elbv2model.ProtocolHTTP, elbv2model.IPAddressTypeIPV4, backend, tgProps)
 
 			if tc.expectErr {
 				assert.Error(t, err)
@@ -1764,7 +1764,7 @@ func Test_buildTargetGroupFromGateway(t *testing.T) {
 				impl.tgByResID[tgResID] = existingTG
 			}
 
-			result, err := impl.buildTargetGroupFromGateway(stack, tc.gateway, tc.listenerPort, tc.lbIPType, tc.route, *tc.backendConfig)
+			result, err := impl.buildTargetGroupFromGateway(stack, tc.gateway, tc.listenerPort, elbv2model.ProtocolHTTP, tc.lbIPType, tc.route, *tc.backendConfig)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
