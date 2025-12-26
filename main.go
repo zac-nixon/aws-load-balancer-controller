@@ -39,6 +39,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwbeta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	gwxalpha1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"k8s.io/client-go/util/workqueue"
 
@@ -95,6 +96,7 @@ func init() {
 	_ = gwv1.AddToScheme(scheme)
 	_ = gwalpha2.AddToScheme(scheme)
 	_ = gwbeta1.AddToScheme(scheme)
+	_ = gwxalpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
