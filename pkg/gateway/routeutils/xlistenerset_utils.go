@@ -10,8 +10,8 @@ import (
 	gwxalpha1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 )
 
-// GetAttachedXListenerSets returns XListenerSets that reference the given Gateway, sorted by precedence
-func GetAttachedXListenerSets(ctx context.Context, k8sClient client.Client, gw *gwv1.Gateway) ([]gwxalpha1.XListenerSet, error) {
+// getAttachedXListenerSets returns XListenerSets that reference the given Gateway, sorted by precedence
+func getAttachedXListenerSets(ctx context.Context, k8sClient client.Client, gw *gwv1.Gateway) ([]gwxalpha1.XListenerSet, error) {
 	listenerSets, err := ListXListenerSets(ctx, k8sClient)
 	if err != nil {
 		return nil, err
@@ -71,8 +71,8 @@ func isXListenerSetAttachedToGateway(ls *gwxalpha1.XListenerSet, gw *gwv1.Gatewa
 	return group == "gateway.networking.k8s.io" && kind == "Gateway"
 }
 
-// MergeListenersWithXListenerSets merges Gateway listeners with XListenerSet listeners per GEP-1713
-func MergeListenersWithXListenerSets(gw *gwv1.Gateway, listenerSets []gwxalpha1.XListenerSet) []gwv1.Listener {
+// mergeListenersWithXListenerSets merges Gateway listeners with XListenerSet listeners per GEP-1713
+func mergeListenersWithXListenerSets(gw *gwv1.Gateway, listenerSets []gwxalpha1.XListenerSet) []gwv1.Listener {
 	var merged []gwv1.Listener
 
 	// Gateway listeners first (highest precedence)

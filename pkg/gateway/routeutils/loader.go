@@ -80,6 +80,12 @@ func NewLoader(k8sClient client.Client, routeSubmitter RouteReconcilerSubmitter,
 
 // LoadRoutesForGateway loads all relevant data for a single Gateway.
 func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter, controllerName string) (*LoaderResult, error) {
+	// Merge XListenerSets into Gateway before processing
+	mergedGw, err := l.mergeXListenerSets(ctx, gw)
+	if err != nil {
+		return nil, err
+	}
+
 	// 1. Load all relevant routes according to the filter
 
 	loadedRoutes := make([]preLoadRouteDescriptor, 0)
@@ -113,11 +119,11 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 	}
 
 	// validate listeners configuration and get listener status
-	listenerValidationResults := ValidateListeners(gw, controllerName, ctx, l.k8sClient)
+	listenerValidationResults := ValidateListeners(*mergedGw, controllerName, ctx, l.k8sClient)
 
 	// 2. Remove routes that aren't granted attachment by the listener.
 	// Map any routes that are granted attachment to the listener port that allows the attachment.
-	mappedRoutes, compatibleHostnamesByPort, statusUpdates, matchedParentRefs, err := l.mapper.mapGatewayAndRoutes(ctx, gw, loadedRoutes)
+	mappedRoutes, compatibleHostnamesByPort, statusUpdates, matchedParentRefs, err := l.mapper.mapGatewayAndRoutes(ctx, *mergedGw, loadedRoutes)
 
 	routeStatusUpdates = append(routeStatusUpdates, statusUpdates...)
 
@@ -126,10 +132,10 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 	}
 
 	// Count attached routes per listener for listener status update
-	attachedRouteMap := buildAttachedRouteMap(gw, mappedRoutes)
+	attachedRouteMap := buildAttachedRouteMap(*mergedGw, mappedRoutes)
 
 	// 3. Load the underlying resource(s) for each route that is configured.
-	loadedRoute, childRouteLoadUpdates, err := l.loadChildResources(ctx, mappedRoutes, compatibleHostnamesByPort, gw, matchedParentRefs)
+	loadedRoute, childRouteLoadUpdates, err := l.loadChildResources(ctx, mappedRoutes, compatibleHostnamesByPort, *mergedGw, matchedParentRefs)
 	routeStatusUpdates = append(routeStatusUpdates, childRouteLoadUpdates...)
 	if err != nil {
 		return nil, err
@@ -141,7 +147,7 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 			routeKey := route.GetRouteIdentifier()
 			if matchedRefs, ok := matchedParentRefs[routeKey]; ok {
 				for _, parentRef := range matchedRefs {
-					routeStatusUpdates = append(routeStatusUpdates, GenerateRouteData(true, true, string(gwv1.RouteConditionAccepted), RouteStatusInfoAcceptedMessage, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw, parentRef.Port, parentRef.SectionName))
+					routeStatusUpdates = append(routeStatusUpdates, GenerateRouteData(true, true, string(gwv1.RouteConditionAccepted), RouteStatusInfoAcceptedMessage, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), *mergedGw, parentRef.Port, parentRef.SectionName))
 				}
 			}
 		}
@@ -238,6 +244,24 @@ func (l *loaderImpl) loadChildResources(ctx context.Context, preloadedRoutes map
 	}
 
 	return loadedRouteData, failedRoutes, nil
+}
+
+// mergeXListenerSets merges XListenerSets into the Gateway
+func (l *loaderImpl) mergeXListenerSets(ctx context.Context, gw gwv1.Gateway) (*gwv1.Gateway, error) {
+	attachedListenerSets, err := getAttachedXListenerSets(ctx, l.k8sClient, &gw)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(attachedListenerSets) == 0 {
+		return &gw, nil
+	}
+
+	mergedGw := gw.DeepCopy()
+	mergedListeners := mergeListenersWithXListenerSets(&gw, attachedListenerSets)
+	mergedGw.Spec.Listeners = mergedListeners
+
+	return mergedGw, nil
 }
 
 func generateRouteDataCacheKey(rd RouteData) string {

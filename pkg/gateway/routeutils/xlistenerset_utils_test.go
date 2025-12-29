@@ -78,7 +78,7 @@ func TestGetAttachedXListenerSets(t *testing.T) {
 		WithObjects(gw, attachedLS1, attachedLS2, unattachedLS).
 		Build()
 
-	attached, err := GetAttachedXListenerSets(context.Background(), client, gw)
+	attached, err := getAttachedXListenerSets(context.Background(), client, gw)
 	assert.NoError(t, err)
 	assert.Len(t, attached, 2)
 
@@ -125,7 +125,7 @@ func TestMergeListenersWithXListenerSets(t *testing.T) {
 		},
 	}
 
-	merged := MergeListenersWithXListenerSets(gw, listenerSets)
+	merged := mergeListenersWithXListenerSets(gw, listenerSets)
 	assert.Len(t, merged, 3)
 
 	// Gateway listener should be first

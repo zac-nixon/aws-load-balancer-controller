@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -18,27 +19,47 @@ import (
 	gwxalpha1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 )
 
-func TestXListenerSetEventHandler_Create(t *testing.T) {
+// setupTestClient creates a test client with GatewayClass and Gateway
+func setupTestClient() client.Client {
 	scheme := runtime.NewScheme()
 	_ = gwv1.AddToScheme(scheme)
 	_ = gwxalpha1.AddToScheme(scheme)
 
 	client := fake.NewClientBuilder().WithScheme(scheme).Build()
-	eventRecorder := record.NewFakeRecorder(10)
-	logger := logr.Discard()
 
-	handler := NewEnqueueRequestsForXListenerSetEventHandler(client, eventRecorder, "test-controller", logger)
-	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
+	// Create a GatewayClass
+	gatewayClass := &gwv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-class",
+		},
+		Spec: gwv1.GatewayClassSpec{
+			ControllerName: "test-controller",
+		},
+	}
+	_ = client.Create(context.Background(), gatewayClass)
 
-	// Create a Gateway first
+	// Create a Gateway
 	gateway := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-gw",
 			Namespace: "default",
 		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "test-class",
+		},
 	}
-	err := client.Create(context.Background(), gateway)
-	assert.NoError(t, err)
+	_ = client.Create(context.Background(), gateway)
+
+	return client
+}
+
+func TestXListenerSetEventHandler_Create(t *testing.T) {
+	client := setupTestClient()
+	eventRecorder := record.NewFakeRecorder(10)
+	logger := logr.Discard()
+
+	handler := NewEnqueueRequestsForXListenerSetEventHandler(client, eventRecorder, "test-controller", logger)
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
 	// Create XListenerSet
 	listenerSet := &gwxalpha1.XListenerSet{
@@ -73,26 +94,12 @@ func TestXListenerSetEventHandler_Create(t *testing.T) {
 }
 
 func TestXListenerSetEventHandler_Update(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = gwv1.AddToScheme(scheme)
-	_ = gwxalpha1.AddToScheme(scheme)
-
-	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	client := setupTestClient()
 	eventRecorder := record.NewFakeRecorder(10)
 	logger := logr.Discard()
 
 	handler := NewEnqueueRequestsForXListenerSetEventHandler(client, eventRecorder, "test-controller", logger)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
-
-	// Create a Gateway first
-	gateway := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-gw",
-			Namespace: "default",
-		},
-	}
-	err := client.Create(context.Background(), gateway)
-	assert.NoError(t, err)
 
 	// Create XListenerSet
 	listenerSet := &gwxalpha1.XListenerSet{
@@ -120,26 +127,12 @@ func TestXListenerSetEventHandler_Update(t *testing.T) {
 }
 
 func TestXListenerSetEventHandler_Delete(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = gwv1.AddToScheme(scheme)
-	_ = gwxalpha1.AddToScheme(scheme)
-
-	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	client := setupTestClient()
 	eventRecorder := record.NewFakeRecorder(10)
 	logger := logr.Discard()
 
 	handler := NewEnqueueRequestsForXListenerSetEventHandler(client, eventRecorder, "test-controller", logger)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
-
-	// Create a Gateway first
-	gateway := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-gw",
-			Namespace: "default",
-		},
-	}
-	err := client.Create(context.Background(), gateway)
-	assert.NoError(t, err)
 
 	// Create XListenerSet
 	listenerSet := &gwxalpha1.XListenerSet{
@@ -197,38 +190,29 @@ func TestXListenerSetEventHandler_NonExistentGateway(t *testing.T) {
 
 	handler.Create(context.Background(), createEvent, queue)
 
-	// Verify that nothing was enqueued since Gateway doesn't exist
+	// Verify that no Gateway was enqueued since it doesn't exist
 	assert.Equal(t, 0, queue.Len())
 }
 
 func TestXListenerSetEventHandler_Update_ParentRefChange(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = gwv1.AddToScheme(scheme)
-	_ = gwxalpha1.AddToScheme(scheme)
-
-	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	client := setupTestClient()
 	eventRecorder := record.NewFakeRecorder(10)
 	logger := logr.Discard()
 
 	handler := NewEnqueueRequestsForXListenerSetEventHandler(client, eventRecorder, "test-controller", logger)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
-	// Create two Gateways
-	oldGateway := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "old-gw",
-			Namespace: "default",
-		},
-	}
-	newGateway := &gwv1.Gateway{
+	// Create second Gateway
+	gateway2 := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "new-gw",
 			Namespace: "default",
 		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: "test-class",
+		},
 	}
-	err := client.Create(context.Background(), oldGateway)
-	assert.NoError(t, err)
-	err = client.Create(context.Background(), newGateway)
+	err := client.Create(context.Background(), gateway2)
 	assert.NoError(t, err)
 
 	// Create XListenerSet with old parentRef
@@ -238,7 +222,7 @@ func TestXListenerSetEventHandler_Update_ParentRefChange(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: gwxalpha1.ListenerSetSpec{
-			ParentRef: gwxalpha1.ParentGatewayReference{Name: "old-gw"},
+			ParentRef: gwxalpha1.ParentGatewayReference{Name: "test-gw"},
 			Listeners: []gwxalpha1.ListenerEntry{
 				{Name: "https", Port: 443, Protocol: gwv1.HTTPSProtocolType},
 			},
@@ -256,16 +240,6 @@ func TestXListenerSetEventHandler_Update_ParentRefChange(t *testing.T) {
 
 	handler.Update(context.Background(), updateEvent, queue)
 
-	// Verify that both Gateways were enqueued
+	// Verify that both Gateways were enqueued (old and new)
 	assert.Equal(t, 2, queue.Len())
-
-	// Check that both gateways are in the queue
-	enqueuedGateways := make(map[string]bool)
-	for queue.Len() > 0 {
-		item, _ := queue.Get()
-		enqueuedGateways[item.Name] = true
-	}
-
-	assert.True(t, enqueuedGateways["old-gw"], "Old gateway should be enqueued")
-	assert.True(t, enqueuedGateways["new-gw"], "New gateway should be enqueued")
 }

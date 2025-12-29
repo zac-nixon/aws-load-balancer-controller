@@ -33,5 +33,3 @@ func TestListXListenerSets(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
 }
-
-

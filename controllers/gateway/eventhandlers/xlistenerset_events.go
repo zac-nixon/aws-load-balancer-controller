@@ -101,12 +101,6 @@ func (h *enqueueRequestsForXListenerSetEvent) enqueueImpactedGateway(ctx context
 		return
 	}
 
-	// Check if Gateway is managed by this controller
-	if !gatewayutils.IsGatewayManagedByLBController(ctx, h.k8sClient, &gw, h.gwController) {
-		h.logger.V(1).Info("gateway not managed by this controller", "xlistenerset", k8s.NamespacedName(ls), "gateway", k8s.NamespacedName(&gw))
-		return
-	}
-
 	// Enqueue the parent Gateway for reconciliation
 	h.logger.V(1).Info("enqueue parent gateway for xlistenerset event", "xlistenerset", k8s.NamespacedName(ls), "gateway", k8s.NamespacedName(&gw))
 	queue.Add(reconcile.Request{NamespacedName: k8s.NamespacedName(&gw)})

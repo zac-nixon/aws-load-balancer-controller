@@ -8,11 +8,14 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	gateway_constants "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxalpha1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 )
 
 type mockMapper struct {
@@ -355,6 +358,12 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			routeReconciler := NewMockRouteReconciler()
+
+			// Create a fake k8sClient for XListenerSet support
+			scheme := runtime.NewScheme()
+			gwxalpha1.AddToScheme(scheme)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
 			loader := loaderImpl{
 				mapper: &mockMapper{
 					t:                  t,
@@ -365,6 +374,7 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				allRouteLoaders: allRouteLoaders,
 				logger:          logr.Discard(),
 				routeSubmitter:  routeReconciler,
+				k8sClient:       k8sClient,
 			}
 
 			filter := &routeFilterImpl{acceptedKinds: tc.acceptedKinds}

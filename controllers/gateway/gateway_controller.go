@@ -185,160 +185,6 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	return runtime.HandleReconcileError(err, r.logger)
 }
 
-// updateXListenerSetStatus updates the status of attached XListenerSets based on Gateway reconciliation results
-func (r *gatewayReconciler) updateXListenerSetStatus(ctx context.Context, gw *gwv1.Gateway, attachedListenerSets []gwxalpha1.XListenerSet, loaderResults *routeutils.LoaderResult) error {
-	for _, ls := range attachedListenerSets {
-		if err := r.updateSingleXListenerSetStatus(ctx, gw, &ls, loaderResults); err != nil {
-			r.logger.Error(err, "Failed to update XListenerSet status", "xlistenerset", k8s.NamespacedName(&ls))
-			// Continue with other XListenerSets even if one fails
-		}
-	}
-	return nil
-}
-
-// updateSingleXListenerSetStatus updates the status of a single XListenerSet
-func (r *gatewayReconciler) updateSingleXListenerSetStatus(ctx context.Context, gw *gwv1.Gateway, ls *gwxalpha1.XListenerSet, loaderResults *routeutils.LoaderResult) error {
-	// Check if Gateway allows this XListenerSet
-	if !r.isXListenerSetAllowedByGateway(gw, ls) {
-		return r.setXListenerSetStatusNotAccepted(ctx, ls, "NotAllowed", "XListenerSet not allowed by parent Gateway")
-	}
-
-	// Validate listeners
-	if err := r.validateXListenerSetListeners(ls); err != nil {
-		return r.setXListenerSetStatusNotAccepted(ctx, ls, "ListenersNotValid", err.Error())
-	}
-
-	// Set status as accepted and programmed
-	return r.setXListenerSetStatusAccepted(ctx, ls, loaderResults)
-}
-
-// isXListenerSetAllowedByGateway checks if the Gateway allows this XListenerSet
-func (r *gatewayReconciler) isXListenerSetAllowedByGateway(gateway *gwv1.Gateway, listenerSet *gwxalpha1.XListenerSet) bool {
-	if gateway.Spec.AllowedListeners == nil || gateway.Spec.AllowedListeners.Namespaces == nil {
-		return false // Default is to allow no XListenerSets
-	}
-
-	allowedNamespaces := gateway.Spec.AllowedListeners.Namespaces
-	if allowedNamespaces.From == nil {
-		return false // Default is None
-	}
-
-	switch *allowedNamespaces.From {
-	case gwv1.NamespacesFromSame:
-		return listenerSet.Namespace == gateway.Namespace
-	case gwv1.NamespacesFromAll:
-		return true
-	case gwv1.NamespacesFromSelector:
-		// TODO: Implement selector-based namespace matching
-		return false
-	case gwv1.NamespacesFromNone:
-		return false
-	default:
-		return false
-	}
-}
-
-// validateXListenerSetListeners validates the listeners in the XListenerSet
-func (r *gatewayReconciler) validateXListenerSetListeners(listenerSet *gwxalpha1.XListenerSet) error {
-	if len(listenerSet.Spec.Listeners) == 0 {
-		return fmt.Errorf("XListenerSet must have at least one listener")
-	}
-
-	// Check for duplicate listener names within the XListenerSet
-	names := make(map[string]bool)
-	for _, listener := range listenerSet.Spec.Listeners {
-		if names[string(listener.Name)] {
-			return fmt.Errorf("duplicate listener name: %s", listener.Name)
-		}
-		names[string(listener.Name)] = true
-	}
-
-	return nil
-}
-
-// setXListenerSetStatusNotAccepted sets the XListenerSet status to not accepted
-func (r *gatewayReconciler) setXListenerSetStatusNotAccepted(ctx context.Context, listenerSet *gwxalpha1.XListenerSet, reason, message string) error {
-	listenerSet.Status.Conditions = []metav1.Condition{
-		{
-			Type:               "Accepted",
-			Status:             metav1.ConditionFalse,
-			Reason:             reason,
-			Message:            message,
-			LastTransitionTime: metav1.Now(),
-		},
-		{
-			Type:               "Programmed",
-			Status:             metav1.ConditionFalse,
-			Reason:             "Invalid",
-			Message:            "XListenerSet is not accepted",
-			LastTransitionTime: metav1.Now(),
-		},
-	}
-
-	return r.k8sClient.Status().Update(ctx, listenerSet)
-}
-
-// setXListenerSetStatusAccepted sets the XListenerSet status to accepted and programmed
-func (r *gatewayReconciler) setXListenerSetStatusAccepted(ctx context.Context, listenerSet *gwxalpha1.XListenerSet, loaderResults *routeutils.LoaderResult) error {
-	// Build listener status based on actual usage
-	var listenerStatuses []gwxalpha1.ListenerEntryStatus
-	for _, listener := range listenerSet.Spec.Listeners {
-		// Calculate attached routes for this listener
-		attachedRoutes := int32(0)
-		if loaderResults != nil && loaderResults.AttachedRoutesMap != nil {
-			if count, exists := loaderResults.AttachedRoutesMap[gwv1.SectionName(listener.Name)]; exists {
-				attachedRoutes = count
-			}
-		}
-
-		status := gwxalpha1.ListenerEntryStatus{
-			Name: listener.Name,
-			Port: listener.Port,
-			SupportedKinds: []gwv1.RouteGroupKind{
-				{Group: (*gwv1.Group)(&[]string{"gateway.networking.k8s.io"}[0]), Kind: "HTTPRoute"},
-			},
-			AttachedRoutes: attachedRoutes,
-			Conditions: []metav1.Condition{
-				{
-					Type:               "Accepted",
-					Status:             metav1.ConditionTrue,
-					Reason:             "Accepted",
-					Message:            "Listener is accepted",
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               "Programmed",
-					Status:             metav1.ConditionTrue,
-					Reason:             "Programmed",
-					Message:            "Listener is programmed",
-					LastTransitionTime: metav1.Now(),
-				},
-			},
-		}
-		listenerStatuses = append(listenerStatuses, status)
-	}
-
-	listenerSet.Status.Listeners = listenerStatuses
-	listenerSet.Status.Conditions = []metav1.Condition{
-		{
-			Type:               "Accepted",
-			Status:             metav1.ConditionTrue,
-			Reason:             "Accepted",
-			Message:            "XListenerSet is accepted",
-			LastTransitionTime: metav1.Now(),
-		},
-		{
-			Type:               "Programmed",
-			Status:             metav1.ConditionTrue,
-			Reason:             "Programmed",
-			Message:            "XListenerSet is programmed",
-			LastTransitionTime: metav1.Now(),
-		},
-	}
-
-	return r.k8sClient.Status().Update(ctx, listenerSet)
-}
-
 func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.Request) error {
 
 	gw := &gwv1.Gateway{}
@@ -347,21 +193,6 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	}
 
 	r.logger.Info("Got request for reconcile", "gw", *gw)
-
-	// Fetch attached XListenerSets
-	attachedListenerSets, err := routeutils.GetAttachedXListenerSets(ctx, r.k8sClient, gw)
-	if err != nil {
-		r.logger.Error(err, "Failed to get attached XListenerSets", "gateway", req.NamespacedName)
-		return err
-	}
-
-	// Create a merged Gateway with XListenerSet listeners
-	mergedGw := gw.DeepCopy()
-	if len(attachedListenerSets) > 0 {
-		mergedListeners := routeutils.MergeListenersWithXListenerSets(gw, attachedListenerSets)
-		mergedGw.Spec.Listeners = mergedListeners
-		r.logger.Info("Merged XListenerSets", "gateway", req.NamespacedName, "listenerSets", len(attachedListenerSets), "totalListeners", len(mergedListeners))
-	}
 
 	gwClass := &gwv1.GatewayClass{}
 
@@ -380,7 +211,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 		return nil
 	}
 
-	mergedLbConfig, err := r.cfgResolver.getLoadBalancerConfigForGateway(ctx, r.k8sClient, r.finalizerManager, mergedGw, gwClass)
+	mergedLbConfig, err := r.cfgResolver.getLoadBalancerConfigForGateway(ctx, r.k8sClient, r.finalizerManager, gw, gwClass)
 
 	if err != nil {
 		statusErr := r.updateGatewayStatusFailure(ctx, gw, gwv1.GatewayReasonInvalid, err.Error(), nil)
@@ -390,7 +221,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 		return err
 	}
 
-	loaderResults, err := r.gatewayLoader.LoadRoutesForGateway(ctx, *mergedGw, r.routeFilter, r.controllerName)
+	loaderResults, err := r.gatewayLoader.LoadRoutesForGateway(ctx, *gw, r.routeFilter, r.controllerName)
 
 	if err != nil || loaderResults.ValidationResults.HasErrors {
 		var loaderErr routeutils.LoaderError
@@ -423,7 +254,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 		}
 	}
 
-	stack, lb, newAddOnConfig, backendSGRequired, secrets, err := r.buildModel(ctx, mergedGw, mergedLbConfig, allRoutes, currentAddOns)
+	stack, lb, newAddOnConfig, backendSGRequired, secrets, err := r.buildModel(ctx, gw, mergedLbConfig, allRoutes, currentAddOns)
 
 	if err != nil {
 		return err
@@ -463,12 +294,6 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	// as we will not attempt to remove the addon again after the annotation reflects the addon is gone.
 	if len(addOnRemovals) > 0 {
 		return persistAddOns(ctx, r.k8sClient, gw, addOnRemovals.UnsortedList(), true)
-	}
-
-	// Update XListenerSet status based on how they were used
-	if err := r.updateXListenerSetStatus(ctx, gw, attachedListenerSets, loaderResults); err != nil {
-		r.logger.Error(err, "Failed to update XListenerSet status")
-		// Don't fail the Gateway reconciliation for XListenerSet status update failures
 	}
 
 	return nil
