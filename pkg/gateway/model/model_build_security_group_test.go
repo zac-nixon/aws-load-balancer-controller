@@ -3,6 +3,8 @@ package model
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
@@ -10,14 +12,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	coremodel "sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	ec2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/ec2"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/networking"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	"testing"
 )
+
+// Helper function to create ListenerConfig from Gateway listeners
+func listenerConfigFromGateway(gw *gwv1.Gateway) *routeutils.ListenerConfig {
+	lc := routeutils.NewListenerConfig()
+	for _, listener := range gw.Spec.Listeners {
+		lc.AddEntry(routeutils.ListenerEntry{
+			Port:        int32(listener.Port),
+			Protocol:    listener.Protocol,
+			SectionName: listener.Name,
+			Hostname:    listener.Hostname,
+			Source:      routeutils.ListenerSourceGateway,
+		})
+	}
+	return lc
+}
 
 func Test_BuildSecurityGroups_Specified(t *testing.T) {
 	const clusterName = "my-cluster"
@@ -220,7 +237,8 @@ func Test_BuildSecurityGroups_Specified(t *testing.T) {
 			stack := coremodel.NewDefaultStack(coremodel.StackID{Namespace: "namespace", Name: "name"})
 			builder := newSecurityGroupBuilder(mockTagger, clusterName, tc.lbType, tc.enableBackendSg, mockSgResolver, mockSgProvider, logr.Discard())
 
-			out, err := builder.buildSecurityGroups(context.Background(), stack, tc.lbConf, gw, tc.ipAddressType)
+			listenerConfig := listenerConfigFromGateway(gw)
+			out, err := builder.buildSecurityGroups(context.Background(), stack, tc.lbConf, gw, listenerConfig, tc.ipAddressType)
 
 			if tc.expectErr {
 				assert.Error(t, err)
@@ -325,7 +343,8 @@ func Test_BuildSecurityGroups_Allocate(t *testing.T) {
 			stack := coremodel.NewDefaultStack(coremodel.StackID{Namespace: "namespace", Name: "name"})
 			builder := newSecurityGroupBuilder(mockTagger, clusterName, elbv2model.LoadBalancerTypeApplication, tc.enableBackendSg, mockSgResolver, mockSgProvider, logr.Discard())
 
-			out, err := builder.buildSecurityGroups(context.Background(), stack, tc.lbConf, gw, tc.ipAddressType)
+			listenerConfig := listenerConfigFromGateway(gw)
+			out, err := builder.buildSecurityGroups(context.Background(), stack, tc.lbConf, gw, listenerConfig, tc.ipAddressType)
 
 			if tc.expectErr {
 				assert.Error(t, err)
@@ -988,12 +1007,61 @@ func Test_BuildSecurityGroups_BuildManagedSecurityGroupIngressPermissions(t *tes
 				},
 			},
 		},
+		{
+			name: "multiple protocols on same port - TCP and UDP (TCP_UDP listener type)",
+			lbConf: elbv2gw.LoadBalancerConfiguration{
+				Spec: elbv2gw.LoadBalancerConfigurationSpec{
+					SourceRanges: &[]string{
+						"10.0.0.0/8",
+					},
+				},
+			},
+			gateway: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{
+							Name:     "tcp-listener",
+							Port:     53,
+							Protocol: gwv1.TCPProtocolType,
+						},
+						{
+							Name:     "udp-listener",
+							Port:     53,
+							Protocol: gwv1.UDPProtocolType,
+						},
+					},
+				},
+			},
+			expected: []ec2model.IPPermission{
+				{
+					IPProtocol: "tcp",
+					FromPort:   awssdk.Int32(53),
+					ToPort:     awssdk.Int32(53),
+					IPRanges: []ec2model.IPRange{
+						{
+							CIDRIP: "10.0.0.0/8",
+						},
+					},
+				},
+				{
+					IPProtocol: "udp",
+					FromPort:   awssdk.Int32(53),
+					ToPort:     awssdk.Int32(53),
+					IPRanges: []ec2model.IPRange{
+						{
+							CIDRIP: "10.0.0.0/8",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := &securityGroupBuilderImpl{}
-			permissions := builder.buildManagedSecurityGroupIngressPermissions(tc.lbConf, tc.gateway, tc.ipAddressType)
+			listenerConfig := listenerConfigFromGateway(tc.gateway)
+			permissions := builder.buildManagedSecurityGroupIngressPermissions(tc.lbConf, listenerConfig, tc.ipAddressType)
 			assert.ElementsMatch(t, tc.expected, permissions, fmt.Sprintf("%+v", permissions))
 		})
 	}

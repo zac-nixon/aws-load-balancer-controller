@@ -56,6 +56,7 @@ type LoaderResult struct {
 	Routes            map[int32][]RouteDescriptor
 	AttachedRoutesMap map[gwv1.SectionName]int32
 	ValidationResults ListenerValidationResults
+	ListenerConfig    *ListenerConfig
 }
 
 var _ Loader = &loaderImpl{}
@@ -99,6 +100,9 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 			l.routeSubmitter.Enqueue(v)
 		}
 	}()
+
+	// Extract listener configurations from the Gateway
+	listenerConfig := extractListenerConfig(gw)
 
 	for route, loader := range l.allRouteLoaders {
 		applicable := filter.IsApplicable(route)
@@ -148,6 +152,7 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 		Routes:            loadedRoute,
 		AttachedRoutesMap: attachedRouteMap,
 		ValidationResults: listenerValidationResults,
+		ListenerConfig:    listenerConfig,
 	}, nil
 }
 
@@ -251,4 +256,25 @@ func generateRouteDataCacheKey(rd RouteData) string {
 		namespace = string(*rd.ParentRef.Namespace)
 	}
 	return fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", rd.RouteMetadata.RouteName, rd.RouteMetadata.RouteNamespace, rd.RouteMetadata.RouteKind, rd.ParentRef.Name, namespace, port, sectionName)
+}
+
+// extractListenerConfig extracts listener configurations from a Gateway.
+// It creates a ListenerConfig containing entries for each listener in the Gateway,
+// capturing port, protocol, section name, and hostname information.
+// All entries are marked with ListenerSourceGateway as their source.
+func extractListenerConfig(gw gwv1.Gateway) *ListenerConfig {
+	config := NewListenerConfig()
+
+	for _, listener := range gw.Spec.Listeners {
+		entry := ListenerEntry{
+			Port:        int32(listener.Port),
+			Protocol:    listener.Protocol,
+			SectionName: listener.Name,
+			Hostname:    listener.Hostname,
+			Source:      ListenerSourceGateway,
+		}
+		config.AddEntry(entry)
+	}
+
+	return config
 }

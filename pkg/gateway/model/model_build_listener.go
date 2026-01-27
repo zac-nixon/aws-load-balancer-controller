@@ -31,7 +31,7 @@ type gwListenerConfig struct {
 }
 
 type listenerBuilder interface {
-	buildListeners(ctx context.Context, stack core.Stack, lb *elbv2model.LoadBalancer, gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor, lbConf elbv2gw.LoadBalancerConfiguration) ([]types.NamespacedName, error)
+	buildListeners(ctx context.Context, stack core.Stack, lb *elbv2model.LoadBalancer, gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor, listenerConfig *routeutils.ListenerConfig, lbConf elbv2gw.LoadBalancerConfiguration) ([]types.NamespacedName, error)
 }
 
 type listenerBuilderImpl struct {
@@ -48,8 +48,8 @@ type listenerBuilderImpl struct {
 	logger                     logr.Logger
 }
 
-func (l listenerBuilderImpl) buildListeners(ctx context.Context, stack core.Stack, lb *elbv2model.LoadBalancer, gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor, lbCfg elbv2gw.LoadBalancerConfiguration) ([]types.NamespacedName, error) {
-	gwLsCfgs, err := mapGatewayListenerConfigsByPort(gw, routes)
+func (l listenerBuilderImpl) buildListeners(ctx context.Context, stack core.Stack, lb *elbv2model.LoadBalancer, gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor, listenerConfig *routeutils.ListenerConfig, lbCfg elbv2gw.LoadBalancerConfiguration) ([]types.NamespacedName, error) {
+	gwLsCfgs, err := mapGatewayListenerConfigsByPort(listenerConfig, routes)
 	if err != nil {
 		return nil, err
 	}
@@ -531,63 +531,63 @@ func buildListenerALPNPolicy(listenerProtocol elbv2model.Protocol, lbLsCfg *elbv
 
 }
 
-// mapGatewayListenerConfigsByPort creates a mapping of ports to listener configurations from the Gateway listeners.
-func mapGatewayListenerConfigsByPort(gw *gwv1.Gateway, routes map[int32][]routeutils.RouteDescriptor) (map[int32]gwListenerConfig, error) {
+// mapGatewayListenerConfigsByPort creates a mapping of ports to listener configurations.
+// Now uses ListenerConfig instead of accessing gw.Spec.Listeners directly.
+func mapGatewayListenerConfigsByPort(listenerConfig *routeutils.ListenerConfig, routes map[int32][]routeutils.RouteDescriptor) (map[int32]gwListenerConfig, error) {
 	gwListenerConfigs := make(map[int32]gwListenerConfig)
-	for _, listener := range gw.Spec.Listeners {
-		port := int32(listener.Port)
-		protocol := elbv2model.Protocol(listener.Protocol)
 
-		_, hasPort := gwListenerConfigs[port]
-		if !hasPort {
-			gwListenerConfigs[port] = gwListenerConfig{
-				protocol:  protocol,
-				hostnames: sets.New[string](),
-			}
-		}
+	for _, port := range listenerConfig.GetAllPorts() {
+		entries := listenerConfig.GetEntriesForPort(port)
 
-		if hasPort && gwListenerConfigs[port].protocol != protocol {
-			// Special case TCP_UDP (or TCP_QUIC)
+		for _, entry := range entries {
+			protocol := elbv2model.Protocol(entry.Protocol)
 
-			mergedValue, mergeErr := mergeProtocols(gwListenerConfigs[port].protocol, protocol)
-
-			if mergeErr != nil {
-				return nil, fmt.Errorf("invalid listeners on gateway, listeners with same ports cannot have different protocols")
+			_, hasPort := gwListenerConfigs[port]
+			if !hasPort {
+				gwListenerConfigs[port] = gwListenerConfig{
+					protocol:  protocol,
+					hostnames: sets.New[string](),
+				}
 			}
 
-			// TODO this only works for TCP, UDP route merging.
-			// If we need to support TLS merging, then this will need
-			// to be updated.
-			gwListenerConfigs[port] = gwListenerConfig{
-				protocol:  mergedValue,
-				hostnames: sets.New[string](),
-			}
-		}
+			if hasPort && gwListenerConfigs[port].protocol != protocol {
+				// Special case TCP_UDP (or TCP_QUIC)
+				mergedValue, mergeErr := mergeProtocols(gwListenerConfigs[port].protocol, protocol)
+				if mergeErr != nil {
+					return nil, fmt.Errorf("invalid listeners, listeners with same ports cannot have different protocols")
+				}
 
-		if listener.Hostname != nil {
-			gwListenerConfigs[port].hostnames.Insert(string(*listener.Hostname))
+				// TODO this only works for TCP, UDP route merging.
+				// If we need to support TLS merging, then this will need
+				// to be updated.
+				gwListenerConfigs[port] = gwListenerConfig{
+					protocol:  mergedValue,
+					hostnames: sets.New[string](),
+				}
+			}
+
+			if entry.Hostname != nil {
+				gwListenerConfigs[port].hostnames.Insert(string(*entry.Hostname))
+			}
 		}
 
 		listenerRoutes := routes[port]
-
-		if listenerRoutes != nil {
-			for _, route := range listenerRoutes {
-				// Use compatible hostnames (intersection) instead of raw route hostnames
-				compatibleHostnamesByPort := route.GetCompatibleHostnamesByPort()[port]
-				if len(compatibleHostnamesByPort) > 0 {
-					for _, hostname := range compatibleHostnamesByPort {
-						gwListenerConfigs[port].hostnames.Insert(string(hostname))
-					}
-				} else {
-					// Fallback to route hostnames if no compatible hostnames
-					for _, routeHostname := range route.GetHostnames() {
-						gwListenerConfigs[port].hostnames.Insert(string(routeHostname))
-					}
+		for _, route := range listenerRoutes {
+			// Use compatible hostnames (intersection) instead of raw route hostnames
+			compatibleHostnamesByPort := route.GetCompatibleHostnamesByPort()[port]
+			if len(compatibleHostnamesByPort) > 0 {
+				for _, hostname := range compatibleHostnamesByPort {
+					gwListenerConfigs[port].hostnames.Insert(string(hostname))
+				}
+			} else {
+				// Fallback to route hostnames if no compatible hostnames
+				for _, routeHostname := range route.GetHostnames() {
+					gwListenerConfigs[port].hostnames.Insert(string(routeHostname))
 				}
 			}
 		}
-
 	}
+
 	return gwListenerConfigs, nil
 }
 

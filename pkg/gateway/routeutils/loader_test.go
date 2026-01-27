@@ -107,6 +107,7 @@ func (m *mockRoute) GetRouteIdentifier() string {
 
 func Test_LoadRoutesForGateway(t *testing.T) {
 	testNamespace := gwv1.Namespace("gw-ns")
+	testHostname := gwv1.Hostname("example.com")
 
 	preLoadHTTPRoutes := []preLoadRouteDescriptor{
 		&mockRoute{
@@ -178,21 +179,27 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                     string
-		acceptedKinds            sets.Set[RouteKind]
-		expectedMap              map[int32][]RouteDescriptor
-		expectedPreloadMap       map[int][]preLoadRouteDescriptor
-		expectedPreMappedRoutes  []preLoadRouteDescriptor
-		mapperRouteStatusUpdates []RouteData
-		expectedReconcileQueue   map[string]bool // generateRouteDataCacheKey -> succeeded
-		expectError              bool
+		name                       string
+		acceptedKinds              sets.Set[RouteKind]
+		gatewayListeners           []gwv1.Listener
+		expectedMap                map[int32][]RouteDescriptor
+		expectedPreloadMap         map[int][]preLoadRouteDescriptor
+		expectedPreMappedRoutes    []preLoadRouteDescriptor
+		mapperRouteStatusUpdates   []RouteData
+		expectedReconcileQueue     map[string]bool // generateRouteDataCacheKey -> succeeded
+		expectError                bool
+		expectedListenerConfigSize int                       // expected number of ports in ListenerConfig
+		expectedListenerEntries    map[int32][]ListenerEntry // expected listener entries by port
 	}{
 		{
-			name:                    "filter allows no routes",
-			acceptedKinds:           make(sets.Set[RouteKind]),
-			expectedPreMappedRoutes: make([]preLoadRouteDescriptor, 0),
-			expectedMap:             make(map[int32][]RouteDescriptor),
-			expectedReconcileQueue:  map[string]bool{},
+			name:                       "filter allows no routes",
+			acceptedKinds:              make(sets.Set[RouteKind]),
+			expectedPreMappedRoutes:    make([]preLoadRouteDescriptor, 0),
+			expectedMap:                make(map[int32][]RouteDescriptor),
+			expectedReconcileQueue:     map[string]bool{},
+			gatewayListeners:           []gwv1.Listener{},
+			expectedListenerConfigSize: 0,
+			expectedListenerEntries:    map[int32][]ListenerEntry{},
 		},
 		{
 			name:                    "filter only allows http route",
@@ -208,6 +215,31 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				"http1-http1-ns-HTTPRoute-gw-gw-ns--": true,
 				"http2-http2-ns-HTTPRoute-gw-gw-ns--": true,
 				"http3-http3-ns-HTTPRoute-gw-gw-ns--": true,
+			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "http-listener",
+					Port:     80,
+					Protocol: gwv1.HTTPProtocolType,
+					Hostname: &testHostname,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 1,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.HTTPProtocolType,
+						SectionName: "http-listener",
+						Hostname:    &testHostname,
+						Source:      ListenerSourceGateway,
+					},
+				},
 			},
 		},
 		{
@@ -227,6 +259,50 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				"http2-http2-ns-HTTPRoute-gw-gw-ns--": true,
 				"http3-http3-ns-HTTPRoute-gw-gw-ns--": true,
 			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "http-listener",
+					Port:     80,
+					Protocol: gwv1.HTTPProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+				{
+					Name:     "https-listener",
+					Port:     443,
+					Protocol: gwv1.HTTPSProtocolType,
+					Hostname: &testHostname,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 2,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.HTTPProtocolType,
+						SectionName: "http-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
+				443: {
+					{
+						Port:        443,
+						Protocol:    gwv1.HTTPSProtocolType,
+						SectionName: "https-listener",
+						Hostname:    &testHostname,
+						Source:      ListenerSourceGateway,
+					},
+				},
+			},
 		},
 		{
 			name:                    "filter only allows tcp route",
@@ -242,6 +318,30 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				"tcp1-tcp1-ns-TCPRoute-gw-gw-ns--": true,
 				"tcp2-tcp2-ns-TCPRoute-gw-gw-ns--": true,
 				"tcp3-tcp3-ns-TCPRoute-gw-gw-ns--": true,
+			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "tcp-listener",
+					Port:     80,
+					Protocol: gwv1.TCPProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(TCPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 1,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.TCPProtocolType,
+						SectionName: "tcp-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
 			},
 		},
 		{
@@ -263,6 +363,49 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				"tcp1-tcp1-ns-TCPRoute-gw-gw-ns--":    true,
 				"tcp2-tcp2-ns-TCPRoute-gw-gw-ns--":    true,
 				"tcp3-tcp3-ns-TCPRoute-gw-gw-ns--":    true,
+			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "tcp-listener",
+					Port:     80,
+					Protocol: gwv1.TCPProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(TCPRouteKind)},
+						},
+					},
+				},
+				{
+					Name:     "https-listener",
+					Port:     443,
+					Protocol: gwv1.HTTPSProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 2,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.TCPProtocolType,
+						SectionName: "tcp-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
+				443: {
+					{
+						Port:        443,
+						Protocol:    gwv1.HTTPSProtocolType,
+						SectionName: "https-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
 			},
 		},
 		{
@@ -299,6 +442,49 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 					ParentRef: gwv1.ParentReference{
 						Name:      "gw",
 						Namespace: &testNamespace,
+					},
+				},
+			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "tcp-listener",
+					Port:     80,
+					Protocol: gwv1.TCPProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(TCPRouteKind)},
+						},
+					},
+				},
+				{
+					Name:     "https-listener",
+					Port:     443,
+					Protocol: gwv1.HTTPSProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 2,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.TCPProtocolType,
+						SectionName: "tcp-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
+				443: {
+					{
+						Port:        443,
+						Protocol:    gwv1.HTTPSProtocolType,
+						SectionName: "https-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
 					},
 				},
 			},
@@ -350,6 +536,30 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 					},
 				},
 			},
+			gatewayListeners: []gwv1.Listener{
+				{
+					Name:     "http-listener",
+					Port:     80,
+					Protocol: gwv1.HTTPProtocolType,
+					AllowedRoutes: &gwv1.AllowedRoutes{
+						Kinds: []gwv1.RouteGroupKind{
+							{Kind: gwv1.Kind(HTTPRouteKind)},
+						},
+					},
+				},
+			},
+			expectedListenerConfigSize: 1,
+			expectedListenerEntries: map[int32][]ListenerEntry{
+				80: {
+					{
+						Port:        80,
+						Protocol:    gwv1.HTTPProtocolType,
+						SectionName: "http-listener",
+						Hostname:    nil,
+						Source:      ListenerSourceGateway,
+					},
+				},
+			},
 		},
 	}
 
@@ -369,10 +579,15 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 			}
 
 			filter := &routeFilterImpl{acceptedKinds: tc.acceptedKinds}
-			result, err := loader.LoadRoutesForGateway(context.Background(), gwv1.Gateway{ObjectMeta: v1.ObjectMeta{
-				Name:      "gw",
-				Namespace: "gw-ns",
-			}}, filter, gateway_constants.ALBGatewayController)
+			result, err := loader.LoadRoutesForGateway(context.Background(), gwv1.Gateway{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "gw",
+					Namespace: "gw-ns",
+				},
+				Spec: gwv1.GatewaySpec{
+					Listeners: tc.gatewayListeners,
+				},
+			}, filter, gateway_constants.ALBGatewayController)
 			if tc.expectError {
 				assert.Error(t, err)
 				return
@@ -388,6 +603,34 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 				v, ok := tc.expectedReconcileQueue[ak]
 				assert.True(t, ok)
 				assert.Equal(t, v, actual.RouteData.RouteStatusInfo.Accepted, ak)
+			}
+
+			// Verify ListenerConfig is populated correctly (Requirement 1.2)
+			assert.NotNil(t, result.ListenerConfig, "ListenerConfig should not be nil")
+			assert.Equal(t, tc.expectedListenerConfigSize, len(result.ListenerConfig.GetAllPorts()), "ListenerConfig should have expected number of ports")
+
+			// Verify each listener entry matches expected values
+			for port, expectedEntries := range tc.expectedListenerEntries {
+				actualEntries := result.ListenerConfig.GetEntriesForPort(port)
+				assert.Equal(t, len(expectedEntries), len(actualEntries), "Port %d should have expected number of entries", port)
+
+				for i, expected := range expectedEntries {
+					if i < len(actualEntries) {
+						actual := actualEntries[i]
+						assert.Equal(t, expected.Port, actual.Port, "Port should match")
+						assert.Equal(t, expected.Protocol, actual.Protocol, "Protocol should match for port %d", port)
+						assert.Equal(t, expected.SectionName, actual.SectionName, "SectionName should match for port %d", port)
+						assert.Equal(t, expected.Source, actual.Source, "Source should be ListenerSourceGateway for port %d", port)
+
+						// Handle hostname comparison (can be nil)
+						if expected.Hostname == nil {
+							assert.Nil(t, actual.Hostname, "Hostname should be nil for port %d", port)
+						} else {
+							assert.NotNil(t, actual.Hostname, "Hostname should not be nil for port %d", port)
+							assert.Equal(t, *expected.Hostname, *actual.Hostname, "Hostname should match for port %d", port)
+						}
+					}
+				}
 			}
 
 		})

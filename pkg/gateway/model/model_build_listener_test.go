@@ -3,10 +3,11 @@ package model
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-logr/logr"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	elbv2sdk "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -28,19 +29,35 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+// gatewayToListenerConfig converts a Gateway's listeners to a ListenerConfig for testing
+func gatewayToListenerConfig(gw *gwv1.Gateway) *routeutils.ListenerConfig {
+	config := routeutils.NewListenerConfig()
+	for _, listener := range gw.Spec.Listeners {
+		entry := routeutils.ListenerEntry{
+			Port:        int32(listener.Port),
+			Protocol:    listener.Protocol,
+			SectionName: listener.Name,
+			Hostname:    listener.Hostname,
+			Source:      routeutils.ListenerSourceGateway,
+		}
+		config.AddEntry(entry)
+	}
+	return config
+}
+
 func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 	fooHostname := gwv1.Hostname("foo.example.com")
 	barHostname := gwv1.Hostname("bar.example.com")
 	tests := []struct {
-		name    string
-		gateway *gwv1.Gateway
-		routes  map[int32][]routeutils.RouteDescriptor
-		want    map[int32]gwListenerConfig
-		wantErr bool
+		name           string
+		listenerConfig *routeutils.ListenerConfig
+		routes         map[int32][]routeutils.RouteDescriptor
+		want           map[int32]gwListenerConfig
+		wantErr        bool
 	}{
 		{
 			name: "single HTTP listener",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -50,7 +67,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				80: {
 					protocol:  elbv2model.ProtocolHTTP,
@@ -61,7 +78,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "single TCP listener",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -71,7 +88,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				443: {
 					protocol:  elbv2model.ProtocolTCP,
@@ -82,7 +99,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "multiple listeners with different protocols",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -102,7 +119,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				80: {
 					protocol:  elbv2model.ProtocolHTTP,
@@ -121,7 +138,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "listeners with hostnames",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -138,7 +155,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				80: {
 					protocol:  elbv2model.ProtocolHTTP,
@@ -153,7 +170,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "duplicate ports with different protocols",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -168,13 +185,13 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want:    nil,
 			wantErr: true,
 		},
 		{
 			name: "multiple hostnames for same port",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -191,7 +208,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				80: {
 					protocol:  elbv2model.ProtocolHTTP,
@@ -201,8 +218,8 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "multiple hostnames for same port",
-			gateway: &gwv1.Gateway{
+			name: "multiple hostnames for same port - duplicate test",
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -219,7 +236,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			want: map[int32]gwListenerConfig{
 				80: {
 					protocol:  elbv2model.ProtocolHTTP,
@@ -230,7 +247,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "host name on listener and route",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -241,7 +258,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			routes: map[int32][]routeutils.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
@@ -262,7 +279,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "duplicate host name should be de-duped",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -273,7 +290,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			routes: map[int32][]routeutils.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
@@ -299,7 +316,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "route with no host name should be accepted",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -310,7 +327,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			routes: map[int32][]routeutils.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
@@ -336,7 +353,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "listener valid merge",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -356,7 +373,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			routes: map[int32][]routeutils.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{},
@@ -379,7 +396,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 		},
 		{
 			name: "listener valid merge - multiple listeners",
-			gateway: &gwv1.Gateway{
+			listenerConfig: gatewayToListenerConfig(&gwv1.Gateway{
 				Spec: gwv1.GatewaySpec{
 					Listeners: []gwv1.Listener{
 						{
@@ -414,7 +431,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			routes: map[int32][]routeutils.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{},
@@ -439,7 +456,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := mapGatewayListenerConfigsByPort(tt.gateway, tt.routes)
+			got, err := mapGatewayListenerConfigsByPort(tt.listenerConfig, tt.routes)
 
 			if tt.wantErr {
 				assert.Error(t, err)
