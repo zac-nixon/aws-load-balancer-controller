@@ -225,12 +225,12 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 
 	loaderResults, err := r.gatewayLoader.LoadRoutesForGateway(ctx, *gw, r.routeFilter, r.controllerName)
 
-	if err != nil || loaderResults.ValidationResults.HasErrors {
+	if err != nil || loaderResults.ListenerInfo.ValidationResults.HasErrors {
 		var loaderErr routeutils.LoaderError
-		if errors.As(err, &loaderErr) || loaderResults.ValidationResults.HasErrors {
+		if errors.As(err, &loaderErr) || loaderResults.ListenerInfo.ValidationResults.HasErrors {
 			var gatewayReason gwv1.GatewayConditionReason
 			var gatewayMessage string
-			if loaderErr == nil && loaderResults.ValidationResults.HasErrors {
+			if loaderErr == nil && loaderResults.ListenerInfo.ValidationResults.HasErrors {
 				gatewayReason = gwv1.GatewayReasonAccepted
 				gatewayMessage = gateway_constants.GatewayAcceptedFalseMessage
 			} else {
@@ -256,7 +256,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 		}
 	}
 
-	stack, lb, newAddOnConfig, backendSGRequired, secrets, err := r.buildModel(ctx, gw, mergedLbConfig, allRoutes, loaderResults.ListenerConfig, currentAddOns, isDeleting)
+	stack, lb, newAddOnConfig, backendSGRequired, secrets, err := r.buildModel(ctx, gw, mergedLbConfig, allRoutes, &loaderResults.ListenerInfo.Config, currentAddOns, isDeleting)
 
 	if err != nil {
 		return err
@@ -410,7 +410,7 @@ func (r *gatewayReconciler) updateGatewayStatusSuccess(ctx context.Context, lbSt
 	}
 
 	// update listeners status
-	ListenerStatuses := buildListenerStatus(*gw, loaderResults.AttachedRoutesMap, loaderResults.ValidationResults, isProgrammed)
+	ListenerStatuses := buildListenerStatus(*gw, loaderResults.ListenerInfo.ValidationResults, isProgrammed)
 	if !isListenerStatusIdentical(gw.Status.Listeners, ListenerStatuses) {
 		gw.Status.Listeners = ListenerStatuses
 		needPatch = true
@@ -436,9 +436,8 @@ func (r *gatewayReconciler) updateGatewayStatusFailure(ctx context.Context, gw *
 
 	// update listener status
 	if loadResults != nil {
-		listenerValidationResults := loadResults.ValidationResults
-		attachedRoutesMap := loadResults.AttachedRoutesMap
-		ListenerStatuses := buildListenerStatus(*gw, attachedRoutesMap, listenerValidationResults, false)
+		listenerValidationResults := loadResults.ListenerInfo.ValidationResults
+		ListenerStatuses := buildListenerStatus(*gw, listenerValidationResults, false)
 		if !isListenerStatusIdentical(gw.Status.Listeners, ListenerStatuses) {
 			gw.Status.Listeners = ListenerStatuses
 			needPatch = true

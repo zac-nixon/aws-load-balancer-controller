@@ -11,7 +11,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func buildListenerStatus(gateway gwv1.Gateway, attachedRoutesMap map[gwv1.SectionName]int32, validateListenerResults routeutils.ListenerValidationResults, isProgrammed bool) []gwv1.ListenerStatus {
+func buildListenerStatus(gateway gwv1.Gateway, validateListenerResults routeutils.ListenerValidationResults, isProgrammed bool) []gwv1.ListenerStatus {
 	var listenerStatuses []gwv1.ListenerStatus
 
 	for _, listener := range gateway.Spec.Listeners {
@@ -21,7 +21,7 @@ func buildListenerStatus(gateway gwv1.Gateway, attachedRoutesMap map[gwv1.Sectio
 		listenerStatus := gwv1.ListenerStatus{
 			Name:           listener.Name,
 			SupportedKinds: listenerValidationResult.SupportedKinds,
-			AttachedRoutes: attachedRoutesMap[listener.Name],
+			AttachedRoutes: listenerValidationResult.AttachedRoutes,
 			Conditions:     conditions,
 		}
 		listenerStatuses = append(listenerStatuses, listenerStatus)

@@ -15,11 +15,11 @@ func Test_buildListenerStatus(t *testing.T) {
 	tests := []struct {
 		name                    string
 		gateway                 gwv1.Gateway
-		attachedRoutesMap       map[gwv1.SectionName]int32
 		validateListenerResults routeutils.ListenerValidationResults
 		supportedKinds          []gwv1.RouteGroupKind
 		isProgrammed            bool
 		expectedListenerCount   int
+		expectedAttachedRoutes  int32
 	}{
 		{
 			name: "with validation results",
@@ -36,19 +36,24 @@ func Test_buildListenerStatus(t *testing.T) {
 					},
 				},
 			},
-			attachedRoutesMap: map[gwv1.SectionName]int32{"listener1": 1},
 			validateListenerResults: routeutils.ListenerValidationResults{
 				Results: map[gwv1.SectionName]routeutils.ListenerValidationResult{
-					"listener1": {Reason: gwv1.ListenerReasonAccepted, Message: "accepted", SupportedKinds: []gwv1.RouteGroupKind{{
-						Kind: "HTTPRoute",
-					}}},
+					"listener1": {
+						Reason:  gwv1.ListenerReasonAccepted,
+						Message: "accepted",
+						SupportedKinds: []gwv1.RouteGroupKind{{
+							Kind: "HTTPRoute",
+						}},
+						AttachedRoutes: 1,
+					},
 				},
 			},
 			supportedKinds: []gwv1.RouteGroupKind{{
 				Kind: "HTTPRoute",
 			}},
-			isProgrammed:          false,
-			expectedListenerCount: 1,
+			isProgrammed:           false,
+			expectedListenerCount:  1,
+			expectedAttachedRoutes: 1,
 		},
 		{
 			name: "empty listeners",
@@ -58,22 +63,22 @@ func Test_buildListenerStatus(t *testing.T) {
 					Listeners: []gwv1.Listener{},
 				},
 			},
-			attachedRoutesMap:       map[gwv1.SectionName]int32{},
 			validateListenerResults: routeutils.ListenerValidationResults{},
 			isProgrammed:            true,
 			expectedListenerCount:   0,
+			expectedAttachedRoutes:  0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildListenerStatus(tt.gateway, tt.attachedRoutesMap, tt.validateListenerResults, tt.isProgrammed)
+			result := buildListenerStatus(tt.gateway, tt.validateListenerResults, tt.isProgrammed)
 
 			assert.Len(t, result, tt.expectedListenerCount)
 
 			for i, listener := range tt.gateway.Spec.Listeners {
 				assert.Equal(t, listener.Name, result[i].Name)
-				assert.Equal(t, tt.attachedRoutesMap[listener.Name], result[i].AttachedRoutes)
+				assert.Equal(t, tt.expectedAttachedRoutes, result[i].AttachedRoutes)
 				assert.Equal(t, tt.supportedKinds, result[i].SupportedKinds)
 				assert.Len(t, result[i].Conditions, 4)
 			}

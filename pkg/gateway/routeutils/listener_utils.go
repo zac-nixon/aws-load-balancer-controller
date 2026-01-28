@@ -14,11 +14,20 @@ type ListenerValidationResult struct {
 	Reason         gwv1.ListenerConditionReason
 	Message        string
 	SupportedKinds []gwv1.RouteGroupKind
+	AttachedRoutes int32
 }
 
 type ListenerValidationResults struct {
 	Results   map[gwv1.SectionName]ListenerValidationResult
 	HasErrors bool
+}
+
+// SetAttachedRoutes updates the attached route count for a specific listener
+func (lvr *ListenerValidationResults) SetAttachedRoutes(sectionName gwv1.SectionName, count int32) {
+	if result, exists := lvr.Results[sectionName]; exists {
+		result.AttachedRoutes = count
+		lvr.Results[sectionName] = result
+	}
 }
 
 // validateListeners validates all listeners configurations in a Gateway against controller-specific requirements.

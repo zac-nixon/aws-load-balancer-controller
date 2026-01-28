@@ -606,12 +606,12 @@ func Test_LoadRoutesForGateway(t *testing.T) {
 			}
 
 			// Verify ListenerConfig is populated correctly (Requirement 1.2)
-			assert.NotNil(t, result.ListenerConfig, "ListenerConfig should not be nil")
-			assert.Equal(t, tc.expectedListenerConfigSize, len(result.ListenerConfig.GetAllPorts()), "ListenerConfig should have expected number of ports")
+			assert.NotNil(t, result.ListenerInfo.Config, "ListenerConfig should not be nil")
+			assert.Equal(t, tc.expectedListenerConfigSize, len(result.ListenerInfo.Config.GetAllPorts()), "ListenerConfig should have expected number of ports")
 
 			// Verify each listener entry matches expected values
 			for port, expectedEntries := range tc.expectedListenerEntries {
-				actualEntries := result.ListenerConfig.GetEntriesForPort(port)
+				actualEntries := result.ListenerInfo.Config.GetEntriesForPort(port)
 				assert.Equal(t, len(expectedEntries), len(actualEntries), "Port %d should have expected number of entries", port)
 
 				for i, expected := range expectedEntries {

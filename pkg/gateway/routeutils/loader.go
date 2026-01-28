@@ -52,11 +52,16 @@ type Loader interface {
 	LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, filter LoadRouteFilter, controllerName string) (*LoaderResult, error)
 }
 
-type LoaderResult struct {
-	Routes            map[int32][]RouteDescriptor
-	AttachedRoutesMap map[gwv1.SectionName]int32
+// ListenerInfo groups all listener-related data from the route loading process.
+// This includes validation results (with attached route counts) and configuration extracted from the Gateway.
+type ListenerInfo struct {
 	ValidationResults ListenerValidationResults
-	ListenerConfig    *ListenerConfig
+	Config            ListenerConfig
+}
+
+type LoaderResult struct {
+	Routes       map[int32][]RouteDescriptor
+	ListenerInfo ListenerInfo
 }
 
 var _ Loader = &loaderImpl{}
@@ -148,11 +153,17 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 		}
 	}
 
+	// Populate attached route counts into validation results
+	for sectionName, count := range attachedRouteMap {
+		listenerValidationResults.SetAttachedRoutes(sectionName, count)
+	}
+
 	return &LoaderResult{
-		Routes:            loadedRoute,
-		AttachedRoutesMap: attachedRouteMap,
-		ValidationResults: listenerValidationResults,
-		ListenerConfig:    listenerConfig,
+		Routes: loadedRoute,
+		ListenerInfo: ListenerInfo{
+			ValidationResults: listenerValidationResults,
+			Config:            *listenerConfig,
+		},
 	}, nil
 }
 
