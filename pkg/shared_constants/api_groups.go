@@ -19,6 +19,9 @@ const (
 	// HTTPRouteKind is the resource kind for HTTPRoute resources
 	HTTPRouteKind = "HTTPRoute"
 
+	// ListenerSetKind is the resource kind for ListenerSet resources
+	ListenerSetKind = "ListenerSet"
+
 	// CoreAPIGroup represents the core API group (empty string)
 	CoreAPIGroup = ""
 
