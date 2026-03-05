@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/aws/services"
 	gateway_constants "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/crddetect"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/listenerset"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/referencecounter"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/inject/pod_readiness"
@@ -102,25 +103,27 @@ func init() {
 
 // Define a struct to hold common gateway controller dependencies
 type gatewayControllerConfig struct {
-	routeLoader             routeutils.Loader
-	cloud                   services.Cloud
-	k8sClient               client.Client
-	controllerCFG           config.ControllerConfig
-	finalizerManager        k8s.FinalizerManager
-	sgReconciler            networking.SecurityGroupReconciler
-	sgManager               networking.SecurityGroupManager
-	elbv2TaggingManager     elbv2deploy.TaggingManager
-	subnetResolver          networking.SubnetsResolver
-	vpcInfoProvider         networking.VPCInfoProvider
-	backendSGProvider       networking.BackendSGProvider
-	sgResolver              networking.SecurityGroupResolver
-	metricsCollector        lbcmetrics.MetricCollector
-	reconcileCounters       *metricsutil.ReconcileCounters
-	serviceReferenceCounter referencecounter.ServiceReferenceCounter
-	networkingManager       networking.NetworkingManager
-	targetGroupCollector    awsmetrics.TargetGroupCollector
-	targetGroupARNMapper    shared_utils.TargetGroupARNMapper
-	certDiscovery           certs.CertDiscovery
+	routeLoader              routeutils.Loader
+	cloud                    services.Cloud
+	k8sClient                client.Client
+	controllerCFG            config.ControllerConfig
+	finalizerManager         k8s.FinalizerManager
+	sgReconciler             networking.SecurityGroupReconciler
+	sgManager                networking.SecurityGroupManager
+	elbv2TaggingManager      elbv2deploy.TaggingManager
+	subnetResolver           networking.SubnetsResolver
+	vpcInfoProvider          networking.VPCInfoProvider
+	backendSGProvider        networking.BackendSGProvider
+	sgResolver               networking.SecurityGroupResolver
+	metricsCollector         lbcmetrics.MetricCollector
+	reconcileCounters        *metricsutil.ReconcileCounters
+	serviceReferenceCounter  referencecounter.ServiceReferenceCounter
+	networkingManager        networking.NetworkingManager
+	targetGroupCollector     awsmetrics.TargetGroupCollector
+	targetGroupARNMapper     shared_utils.TargetGroupARNMapper
+	certDiscovery            certs.CertDiscovery
+	listenerSetCRDPresent    bool
+	listenerSetStatusManager listenerset.ListenerSetStatusManager
 }
 
 func main() {
@@ -180,6 +183,7 @@ func main() {
 	// Gateway API CRD auto-detection: check which CRDs are installed and disable
 	// feature flags for missing CRDs before any controller setup reads them.
 	crddetect.ApplyGatewayCRDDetection(clientSet.Discovery(), controllerCFG.FeatureGates, setupLog)
+	listenerSetCRDPresent := crddetect.DetectListenerSetCRD(clientSet.Discovery(), setupLog)
 
 	nlbGatewayEnabled := controllerCFG.FeatureGates.Enabled(config.NLBGatewayAPI)
 	albGatewayEnabled := controllerCFG.FeatureGates.Enabled(config.ALBGatewayAPI)
@@ -290,10 +294,22 @@ func main() {
 			certDiscovery:           certDiscovery,
 		}
 
+		// Instantiate ListenerSet dependencies conditionally based on CRD presence
+		var lsLoader listenerset.ListenerSetLoader
+		var lsMerger listenerset.ListenerMerger
+		var lsStatusManager listenerset.ListenerSetStatusManager
+		if listenerSetCRDPresent {
+			lsLoader = listenerset.NewListenerSetLoader(mgr.GetClient(), mgr.GetLogger().WithName("listenerset-loader"))
+			lsMerger = listenerset.NewListenerMerger()
+			lsStatusManager = listenerset.NewListenerSetStatusManager(mgr.GetClient(), mgr.GetLogger().WithName("listenerset-status"))
+		}
+		gwControllerConfig.listenerSetCRDPresent = listenerSetCRDPresent
+		gwControllerConfig.listenerSetStatusManager = lsStatusManager
+
 		enabledControllers := sets.Set[string]{}
 
 		routeLoaderCreator := sync.OnceValue(func() routeutils.Loader {
-			return routeutils.NewLoader(mgr.GetClient(), routeReconciler, mgr.GetLogger().WithName("gateway-route-loader"))
+			return routeutils.NewLoader(mgr.GetClient(), routeReconciler, lsLoader, lsMerger, mgr.GetLogger().WithName("gateway-route-loader"))
 		})
 
 		// Setup NLB Gateway controller if enabled
@@ -520,6 +536,8 @@ func setupGatewayController(ctx context.Context, mgr ctrl.Manager, cfg *gatewayC
 			cfg.reconcileCounters,
 			cfg.targetGroupCollector,
 			cfg.targetGroupARNMapper,
+			cfg.listenerSetCRDPresent,
+			cfg.listenerSetStatusManager,
 		)
 	case gateway_constants.ALBGatewayController:
 		reconciler = gateway.NewALBGatewayReconciler(
@@ -544,6 +562,8 @@ func setupGatewayController(ctx context.Context, mgr ctrl.Manager, cfg *gatewayC
 			cfg.reconcileCounters,
 			cfg.targetGroupCollector,
 			cfg.targetGroupARNMapper,
+			cfg.listenerSetCRDPresent,
+			cfg.listenerSetStatusManager,
 		)
 	default:
 		return fmt.Errorf("unknown controller type: %s", controllerType)

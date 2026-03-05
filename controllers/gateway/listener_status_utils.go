@@ -11,11 +11,24 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+// buildListenerStatus builds status for all listeners including both Gateway-native
+// and ListenerSet-sourced listeners from the merged listener list. ListenerSet-sourced
+// listeners are treated identically since they are standard gwv1.Listener objects after
+// merging, and their validation results are included in validateListenerResults.
 func buildListenerStatus(gateway gwv1.Gateway, listeners []gwv1.Listener, attachedRoutesMap map[gwv1.SectionName]int32, validateListenerResults routeutils.ListenerValidationResults, isProgrammed bool) []gwv1.ListenerStatus {
 	var listenerStatuses []gwv1.ListenerStatus
 
 	for _, listener := range listeners {
-		listenerValidationResult := validateListenerResults.Results[listener.Name]
+		listenerValidationResult, exists := validateListenerResults.Results[listener.Name]
+		if !exists {
+			// Defensive: if no validation result exists for this listener (e.g., a ListenerSet
+			// listener that was not validated), treat it as accepted with no supported kinds.
+			listenerValidationResult = routeutils.ListenerValidationResult{
+				ListenerName: listener.Name,
+				IsValid:      true,
+				Reason:       gwv1.ListenerReasonAccepted,
+			}
+		}
 		conditions := getListenerConditions(gateway, listenerValidationResult, isProgrammed)
 
 		listenerStatus := gwv1.ListenerStatus{
