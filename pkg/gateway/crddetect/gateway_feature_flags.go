@@ -18,6 +18,9 @@ var (
 	StandardCRDKinds = []string{"Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute"}
 	// ExperimentalCRDKinds lists the CRD kinds required for NLB Gateway API support.
 	ExperimentalCRDKinds = []string{"TCPRoute", "UDPRoute", "TLSRoute"}
+	// ListenerSetCRDKinds lists the CRD kinds for ListenerSet support.
+	// Kept separate from StandardCRDKinds because missing ListenerSet should NOT disable ALB/NLB Gateway API.
+	ListenerSetCRDKinds = []string{"ListenerSet"}
 )
 
 // ApplyGatewayCRDDetection checks for the presence of Gateway API CRDs and
@@ -54,4 +57,21 @@ func ApplyGatewayFeatureFlags(standardResult, experimentalResult k8s.CRDGroupRes
 			"standardGroupVersion", standardResult.GroupVersion,
 			"experimentalGroupVersion", experimentalResult.GroupVersion)
 	}
+}
+
+// DetectListenerSetCRD checks whether the ListenerSet CRD is installed in the
+// cluster. It returns true when the CRD is present and false otherwise.
+// Missing ListenerSet CRD does NOT disable any feature flags — the controller
+// continues to operate normally, just without ListenerSet support.
+func DetectListenerSetCRD(client k8s.DiscoveryClient, logger logr.Logger) bool {
+	result := k8s.DetectCRDs(client, GatewayV1GroupVersion, ListenerSetCRDKinds)
+	if !result.AllPresent {
+		logger.Info("ListenerSet CRD not found, ListenerSet support will be disabled",
+			"groupVersion", result.GroupVersion,
+			"missing", result.MissingKinds)
+		return false
+	}
+	logger.Info("ListenerSet CRD detected, ListenerSet support enabled",
+		"groupVersion", result.GroupVersion)
+	return true
 }
