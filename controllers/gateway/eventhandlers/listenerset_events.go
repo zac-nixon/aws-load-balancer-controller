@@ -50,9 +50,11 @@ func (h *enqueueRequestsForListenerSetEvent) Create(ctx context.Context, e event
 }
 
 func (h *enqueueRequestsForListenerSetEvent) Update(ctx context.Context, e event.TypedUpdateEvent[*gwv1.ListenerSet], queue workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-	ls := e.ObjectNew
-	h.logger.V(1).Info("enqueue listenerset update event", "listenerset", k8s.NamespacedName(ls))
-	h.enqueueParentGateway(ctx, ls, queue)
+	lsOld := e.ObjectOld
+	lsNew := e.ObjectNew
+	h.logger.V(1).Info("enqueue listenerset update event", "listenerset", k8s.NamespacedName(lsNew))
+	h.enqueueParentGateway(ctx, lsOld, queue)
+	h.enqueueParentGateway(ctx, lsNew, queue)
 }
 
 func (h *enqueueRequestsForListenerSetEvent) Delete(ctx context.Context, e event.TypedDeleteEvent[*gwv1.ListenerSet], queue workqueue.TypedRateLimitingInterface[reconcile.Request]) {

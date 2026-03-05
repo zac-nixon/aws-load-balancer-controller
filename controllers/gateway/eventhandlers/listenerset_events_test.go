@@ -231,38 +231,97 @@ func Test_enqueueRequestsForListenerSetEvent_Create(t *testing.T) {
 }
 
 func Test_enqueueRequestsForListenerSetEvent_Update(t *testing.T) {
-	ctx := context.Background()
-	k8sClient := testutils.GenerateTestClient()
+	t.Run("same parentRef enqueues gateway once (deduped by rate limiter)", func(t *testing.T) {
+		ctx := context.Background()
+		k8sClient := testutils.GenerateTestClient()
 
-	gwClass := &gwv1.GatewayClass{
-		ObjectMeta: metav1.ObjectMeta{Name: "alb-class"},
-		Spec:       gwv1.GatewayClassSpec{ControllerName: gwv1.GatewayController(constants.ALBGatewayController)},
-	}
-	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-gw", Namespace: "default"},
-		Spec:       gwv1.GatewaySpec{GatewayClassName: "alb-class"},
-	}
-	assert.NoError(t, k8sClient.Create(ctx, gwClass))
-	assert.NoError(t, k8sClient.Create(ctx, gw))
+		gwClass := &gwv1.GatewayClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "alb-class"},
+			Spec:       gwv1.GatewayClassSpec{ControllerName: gwv1.GatewayController(constants.ALBGatewayController)},
+		}
+		gw := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-gw", Namespace: "default"},
+			Spec:       gwv1.GatewaySpec{GatewayClassName: "alb-class"},
+		}
+		assert.NoError(t, k8sClient.Create(ctx, gwClass))
+		assert.NoError(t, k8sClient.Create(ctx, gw))
 
-	ls := &gwv1.ListenerSet{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-ls", Namespace: "default"},
-		Spec: gwv1.ListenerSetSpec{
-			ParentRef: gwv1.ParentGatewayReference{Name: "my-gw"},
-		},
-	}
+		lsOld := &gwv1.ListenerSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-ls", Namespace: "default"},
+			Spec: gwv1.ListenerSetSpec{
+				ParentRef: gwv1.ParentGatewayReference{Name: "my-gw"},
+			},
+		}
+		lsNew := &gwv1.ListenerSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-ls", Namespace: "default"},
+			Spec: gwv1.ListenerSetSpec{
+				ParentRef: gwv1.ParentGatewayReference{Name: "my-gw"},
+			},
+		}
 
-	handler := NewEnqueueRequestsForListenerSetEvent(k8sClient, nil, constants.ALBGatewayController, log.Log)
-	queue := workqueue.NewTypedRateLimitingQueue[reconcile.Request](
-		workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
-	)
-	defer queue.ShutDown()
+		h := NewEnqueueRequestsForListenerSetEvent(k8sClient, nil, constants.ALBGatewayController, log.Log)
+		queue := workqueue.NewTypedRateLimitingQueue[reconcile.Request](
+			workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+		)
+		defer queue.ShutDown()
 
-	handler.Update(ctx, event.TypedUpdateEvent[*gwv1.ListenerSet]{ObjectNew: ls}, queue)
+		h.Update(ctx, event.TypedUpdateEvent[*gwv1.ListenerSet]{ObjectOld: lsOld, ObjectNew: lsNew}, queue)
 
-	assert.Equal(t, 1, queue.Len())
-	item, _ := queue.Get()
-	assert.Equal(t, types.NamespacedName{Name: "my-gw", Namespace: "default"}, item.NamespacedName)
+		assert.Equal(t, 1, queue.Len())
+		item, _ := queue.Get()
+		assert.Equal(t, types.NamespacedName{Name: "my-gw", Namespace: "default"}, item.NamespacedName)
+	})
+
+	t.Run("changed parentRef enqueues both old and new gateways", func(t *testing.T) {
+		ctx := context.Background()
+		k8sClient := testutils.GenerateTestClient()
+
+		gwClass := &gwv1.GatewayClass{
+			ObjectMeta: metav1.ObjectMeta{Name: "alb-class"},
+			Spec:       gwv1.GatewayClassSpec{ControllerName: gwv1.GatewayController(constants.ALBGatewayController)},
+		}
+		gwOld := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: "gw-old", Namespace: "default"},
+			Spec:       gwv1.GatewaySpec{GatewayClassName: "alb-class"},
+		}
+		gwNew := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: "gw-new", Namespace: "default"},
+			Spec:       gwv1.GatewaySpec{GatewayClassName: "alb-class"},
+		}
+		assert.NoError(t, k8sClient.Create(ctx, gwClass))
+		assert.NoError(t, k8sClient.Create(ctx, gwOld))
+		assert.NoError(t, k8sClient.Create(ctx, gwNew))
+
+		lsOld := &gwv1.ListenerSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-ls", Namespace: "default"},
+			Spec: gwv1.ListenerSetSpec{
+				ParentRef: gwv1.ParentGatewayReference{Name: "gw-old"},
+			},
+		}
+		lsNew := &gwv1.ListenerSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-ls", Namespace: "default"},
+			Spec: gwv1.ListenerSetSpec{
+				ParentRef: gwv1.ParentGatewayReference{Name: "gw-new"},
+			},
+		}
+
+		h := NewEnqueueRequestsForListenerSetEvent(k8sClient, nil, constants.ALBGatewayController, log.Log)
+		queue := workqueue.NewTypedRateLimitingQueue[reconcile.Request](
+			workqueue.DefaultTypedControllerRateLimiter[reconcile.Request](),
+		)
+		defer queue.ShutDown()
+
+		h.Update(ctx, event.TypedUpdateEvent[*gwv1.ListenerSet]{ObjectOld: lsOld, ObjectNew: lsNew}, queue)
+
+		assert.Equal(t, 2, queue.Len())
+		enqueued := map[string]bool{}
+		for i := 0; i < 2; i++ {
+			item, _ := queue.Get()
+			enqueued[item.NamespacedName.Name] = true
+		}
+		assert.True(t, enqueued["gw-old"], "old gateway should be enqueued")
+		assert.True(t, enqueued["gw-new"], "new gateway should be enqueued")
+	})
 }
 
 func Test_enqueueRequestsForListenerSetEvent_Delete(t *testing.T) {
