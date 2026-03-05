@@ -6,7 +6,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/listenerset"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -57,25 +59,53 @@ type LoaderResult struct {
 	Listeners         []gwv1.Listener
 	AttachedRoutesMap map[gwv1.SectionName]int32
 	ValidationResults ListenerValidationResults
+	// RouteOrigins tracks which parentRef each route was attached through.
+	RouteOrigins map[types.NamespacedName][]RouteOrigin
+	// ListenerSetResult contains accepted/rejected ListenerSets for status updates.
+	// Nil when no ListenerSets reference this Gateway.
+	ListenerSetResult *listenerset.ListenerSetLoadResult
+	// MergeResult contains the conflict map for status updates.
+	// Nil when no ListenerSets were accepted.
+	MergeResult *listenerset.MergeResult
+}
+
+// RouteOrigin identifies whether a route was attached via a Gateway or ListenerSet parentRef.
+type RouteOrigin struct {
+	// ParentRefKind is "Gateway" or "ListenerSet"
+	ParentRefKind string
+	// ParentRefName is the name of the Gateway or ListenerSet
+	ParentRefName string
+	// ParentRefNamespace is the namespace of the Gateway or ListenerSet
+	ParentRefNamespace string
+	// SectionName is the sectionName from the parentRef (may be empty)
+	SectionName *gwv1.SectionName
+	// MatchedListenerPorts lists the merged listener ports this route attached to
+	MatchedListenerPorts []int32
 }
 
 var _ Loader = &loaderImpl{}
 
 type loaderImpl struct {
-	mapper          listenerToRouteMapper
-	routeSubmitter  RouteReconcilerSubmitter
-	k8sClient       client.Client
-	logger          logr.Logger
-	allRouteLoaders map[RouteKind]func(context context.Context, client client.Client, opts ...client.ListOption) ([]preLoadRouteDescriptor, error)
+	mapper            listenerToRouteMapper
+	routeSubmitter    RouteReconcilerSubmitter
+	k8sClient         client.Client
+	logger            logr.Logger
+	allRouteLoaders   map[RouteKind]func(context context.Context, client client.Client, opts ...client.ListOption) ([]preLoadRouteDescriptor, error)
+	listenerSetLoader listenerset.ListenerSetLoader
+	listenerMerger    listenerset.ListenerMerger
+	nsSelector        namespaceSelector
 }
 
-func NewLoader(k8sClient client.Client, routeSubmitter RouteReconcilerSubmitter, logger logr.Logger) Loader {
+func NewLoader(k8sClient client.Client, routeSubmitter RouteReconcilerSubmitter, listenerSetLoader listenerset.ListenerSetLoader, listenerMerger listenerset.ListenerMerger, logger logr.Logger) Loader {
 	return &loaderImpl{
-		mapper:          newListenerToRouteMapper(k8sClient, logger.WithName("route-mapper")),
-		routeSubmitter:  routeSubmitter,
-		k8sClient:       k8sClient,
-		allRouteLoaders: allRoutes,
-		logger:          logger,
+		mapper:            newListenerToRouteMapper(k8sClient, logger.WithName("route-mapper")),
+		routeSubmitter:    routeSubmitter,
+		k8sClient:         k8sClient,
+		allRouteLoaders:   allRoutes,
+		listenerSetLoader: listenerSetLoader,
+		listenerMerger:    listenerMerger,
+		nsSelector:        newNamespaceSelector(k8sClient),
+		logger:            logger,
 	}
 }
 
@@ -113,8 +143,30 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 		}
 	}
 
-	// validate listeners configuration and get listener status
+	// Load ListenerSets and merge listeners if ListenerSet support is available
 	listeners := gw.Spec.Listeners
+	var listenerSetResult *listenerset.ListenerSetLoadResult
+	var mergeResult *listenerset.MergeResult
+
+	if l.listenerSetLoader != nil {
+		lsResult, err := l.listenerSetLoader.LoadListenerSetsForGateway(ctx, gw)
+		if err != nil {
+			l.logger.Error(err, "Failed to load ListenerSets for Gateway, continuing with Gateway listeners only")
+		} else {
+			listenerSetResult = lsResult
+			if len(lsResult.AcceptedSets) > 0 && l.listenerMerger != nil {
+				mergeResult = l.listenerMerger.MergeListeners(gw, lsResult.AcceptedSets)
+				// Extract gwv1.Listener from each MergedListener
+				mergedListeners := make([]gwv1.Listener, 0, len(mergeResult.MergedListeners))
+				for _, ml := range mergeResult.MergedListeners {
+					mergedListeners = append(mergedListeners, ml.Listener)
+				}
+				listeners = mergedListeners
+			}
+		}
+	}
+
+	// validate listeners configuration and get listener status
 	listenerValidationResults := validateListeners(listeners, controllerName)
 
 	// 2. Remove routes that aren't granted attachment by the listener.
@@ -146,11 +198,31 @@ func (l *loaderImpl) LoadRoutesForGateway(ctx context.Context, gw gwv1.Gateway, 
 		}
 	}
 
+	// 5. Load routes with ListenerSet parentRefs
+	var routeOrigins map[types.NamespacedName][]RouteOrigin
+	if listenerSetResult != nil && len(listenerSetResult.AcceptedSets) > 0 && mergeResult != nil {
+		lsRoutes, lsStatusUpdates, origins, err := l.loadRoutesForListenerSetParentRefs(
+			ctx, listenerSetResult.AcceptedSets, mergeResult, loadedRoutes,
+		)
+		if err != nil {
+			return nil, err
+		}
+		routeStatusUpdates = append(routeStatusUpdates, lsStatusUpdates...)
+		routeOrigins = origins
+		// Merge LS routes into the existing route map
+		for port, routes := range lsRoutes {
+			loadedRoute[port] = append(loadedRoute[port], routes...)
+		}
+	}
+
 	return &LoaderResult{
 		Routes:            loadedRoute,
 		Listeners:         listeners,
 		AttachedRoutesMap: attachedRouteMap,
 		ValidationResults: listenerValidationResults,
+		RouteOrigins:      routeOrigins,
+		ListenerSetResult: listenerSetResult,
+		MergeResult:       mergeResult,
 	}, nil
 }
 
