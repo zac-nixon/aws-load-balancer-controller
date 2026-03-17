@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -16,12 +17,12 @@ type mockListenerAttachmentHelper struct {
 	attachmentMap map[string]bool
 }
 
-func makeListenerAttachmentMapKey(listener gwv1.Listener, route preLoadRouteDescriptor) string {
+func makeListenerAttachmentMapKey(listener gwv1.Listener, route backendutils.preLoadRouteDescriptor) string {
 	nsn := route.GetRouteNamespacedName()
 	return fmt.Sprintf("%s-%d-%s-%s", listener.Name, listener.Port, nsn.Name, nsn.Namespace)
 }
 
-func (m *mockListenerAttachmentHelper) listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor, matchedParentRef *gwv1.ParentReference, hostnamesFromHttpRoutes map[types.NamespacedName][]gwv1.Hostname, hostnamesFromGrpcRoutes map[types.NamespacedName][]gwv1.Hostname) ([]gwv1.Hostname, bool, *RouteData, error) {
+func (m *mockListenerAttachmentHelper) listenerAllowsAttachment(ctx context.Context, gw gwv1.Gateway, listener gwv1.Listener, route backendutils.preLoadRouteDescriptor, matchedParentRef *gwv1.ParentReference, hostnamesFromHttpRoutes map[types.NamespacedName][]gwv1.Hostname, hostnamesFromGrpcRoutes map[types.NamespacedName][]gwv1.Hostname) ([]gwv1.Hostname, bool, *RouteData, error) {
 	k := makeListenerAttachmentMapKey(listener, route)
 	return nil, m.attachmentMap[k], nil, nil
 }
@@ -31,45 +32,45 @@ type mockRouteAttachmentHelper struct {
 	routeListenerMap map[string]bool
 }
 
-func makeRouteGatewayMapKey(gw gwv1.Gateway, route preLoadRouteDescriptor) string {
+func makeRouteGatewayMapKey(gw gwv1.Gateway, route backendutils.preLoadRouteDescriptor) string {
 	nsn := route.GetRouteNamespacedName()
 	return fmt.Sprintf("%s-%s-%s-%s", gw.Name, gw.Namespace, nsn.Name, nsn.Namespace)
 }
 
-func (m *mockRouteAttachmentHelper) doesRouteAttachToGateway(gw gwv1.Gateway, route preLoadRouteDescriptor) bool {
+func (m *mockRouteAttachmentHelper) doesRouteAttachToGateway(gw gwv1.Gateway, route backendutils.preLoadRouteDescriptor) bool {
 	k := makeRouteGatewayMapKey(gw, route)
 	return m.routeGatewayMap[k]
 }
 
-func (m *mockRouteAttachmentHelper) routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, *gwv1.ParentReference) {
+func (m *mockRouteAttachmentHelper) routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route backendutils.preLoadRouteDescriptor) (bool, *gwv1.ParentReference) {
 	k := makeListenerAttachmentMapKey(listener, route)
 	return m.routeListenerMap[k], nil
 }
 
 func Test_mapGatewayAndRoutes(t *testing.T) {
 
-	route1 := convertHTTPRoute(gwv1.HTTPRoute{
+	route1 := backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route1",
 			Namespace: "ns1",
 		},
 	})
 
-	route2 := convertHTTPRoute(gwv1.HTTPRoute{
+	route2 := backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route2",
 			Namespace: "ns2",
 		},
 	})
 
-	route3 := convertHTTPRoute(gwv1.HTTPRoute{
+	route3 := backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route3",
 			Namespace: "ns3",
 		},
 	})
 
-	route4 := convertHTTPRoute(gwv1.HTTPRoute{
+	route4 := backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route4",
 			Namespace: "ns4",
@@ -102,18 +103,18 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		gw                    gwv1.Gateway
-		routes                []preLoadRouteDescriptor
+		routes                []backendutils.preLoadRouteDescriptor
 		listenerAttachmentMap map[string]bool
 		routeGatewayMap       map[string]bool
 		routeListenerMap      map[string]bool
-		expected              map[int][]preLoadRouteDescriptor
+		expected              map[int][]backendutils.preLoadRouteDescriptor
 		routesPerListener     map[gwv1.SectionName]int32
 		expectErr             bool
 	}{
 		{
 			name:   "routes get mapped to each listener",
 			gw:     gateway,
-			routes: []preLoadRouteDescriptor{route1, route2, route3, route4},
+			routes: []backendutils.preLoadRouteDescriptor{route1, route2, route3, route4},
 			listenerAttachmentMap: map[string]bool{
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[0], route1): true,
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[1], route2): true,
@@ -130,7 +131,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 				makeRouteGatewayMapKey(gateway, route3): true,
 				makeRouteGatewayMapKey(gateway, route4): true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				80: {
 					route1,
 				},
@@ -150,7 +151,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 		{
 			name:   "all routes to all listeners",
 			gw:     gateway,
-			routes: []preLoadRouteDescriptor{route1, route2, route3, route4},
+			routes: []backendutils.preLoadRouteDescriptor{route1, route2, route3, route4},
 			listenerAttachmentMap: map[string]bool{
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[0], route1): true,
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[1], route1): true,
@@ -179,7 +180,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 				makeRouteGatewayMapKey(gateway, route3): true,
 				makeRouteGatewayMapKey(gateway, route4): true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				80: {
 					route1,
 					route2,
@@ -205,7 +206,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 		{
 			name:   "gateway doesnt allow attachment, no result",
 			gw:     gateway,
-			routes: []preLoadRouteDescriptor{route1, route2, route3, route4},
+			routes: []backendutils.preLoadRouteDescriptor{route1, route2, route3, route4},
 			listenerAttachmentMap: map[string]bool{
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[0], route1): true,
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[1], route1): true,
@@ -229,7 +230,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[2], route3): true,
 			},
 			routeGatewayMap: map[string]bool{},
-			expected:        map[int][]preLoadRouteDescriptor{},
+			expected:        map[int][]backendutils.preLoadRouteDescriptor{},
 			routesPerListener: map[gwv1.SectionName]int32{
 				"section80": 0,
 				"section81": 0,
@@ -239,7 +240,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 		{
 			name:   "route allows all attachment, but listener only allows subset",
 			gw:     gateway,
-			routes: []preLoadRouteDescriptor{route1, route2, route3, route4},
+			routes: []backendutils.preLoadRouteDescriptor{route1, route2, route3, route4},
 			listenerAttachmentMap: map[string]bool{
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[0], route1): true,
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[1], route2): true,
@@ -262,7 +263,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 				makeRouteGatewayMapKey(gateway, route3): true,
 				makeRouteGatewayMapKey(gateway, route4): true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				80: {
 					route1,
 				},
@@ -282,7 +283,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 		{
 			name:   "listener allows all attachment, but route only allows subset",
 			gw:     gateway,
-			routes: []preLoadRouteDescriptor{route1, route2, route3, route4},
+			routes: []backendutils.preLoadRouteDescriptor{route1, route2, route3, route4},
 			listenerAttachmentMap: map[string]bool{
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[0], route1): true,
 				makeListenerAttachmentMapKey(gateway.Spec.Listeners[1], route1): true,
@@ -305,7 +306,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 				makeRouteGatewayMapKey(gateway, route3): true,
 				makeRouteGatewayMapKey(gateway, route4): true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				80: {
 					route1,
 				},
@@ -324,7 +325,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 		},
 		{
 			name:              "no output",
-			expected:          make(map[int][]preLoadRouteDescriptor),
+			expected:          make(map[int][]backendutils.preLoadRouteDescriptor),
 			routesPerListener: map[gwv1.SectionName]int32{},
 		},
 		{
@@ -347,7 +348,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 					},
 				},
 			},
-			routes: []preLoadRouteDescriptor{route1},
+			routes: []backendutils.preLoadRouteDescriptor{route1},
 			listenerAttachmentMap: map[string]bool{
 				"listener1-port80-80-route1-ns1": true,
 				"listener2-port80-80-route1-ns1": true,
@@ -359,7 +360,7 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 			routeGatewayMap: map[string]bool{
 				makeRouteGatewayMapKey(gateway, route1): true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				80: {route1}, // Only one route1, not duplicated
 			},
 			routesPerListener: map[gwv1.SectionName]int32{
@@ -384,14 +385,14 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 					},
 				},
 			},
-			routes: []preLoadRouteDescriptor{
-				convertHTTPRoute(gwv1.HTTPRoute{
+			routes: []backendutils.preLoadRouteDescriptor{
+				backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "my-route",
 						Namespace: "default",
 					},
 				}),
-				convertGRPCRoute(gwv1.GRPCRoute{
+				backendutils.convertGRPCRoute(gwv1.GRPCRoute{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "my-route",
 						Namespace: "default",
@@ -407,15 +408,15 @@ func Test_mapGatewayAndRoutes(t *testing.T) {
 			routeGatewayMap: map[string]bool{
 				"gw1-ns-gw-my-route-default": true,
 			},
-			expected: map[int][]preLoadRouteDescriptor{
+			expected: map[int][]backendutils.preLoadRouteDescriptor{
 				443: {
-					convertHTTPRoute(gwv1.HTTPRoute{
+					backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "my-route",
 							Namespace: "default",
 						},
 					}),
-					convertGRPCRoute(gwv1.GRPCRoute{
+					backendutils.convertGRPCRoute(gwv1.GRPCRoute{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "my-route",
 							Namespace: "default",

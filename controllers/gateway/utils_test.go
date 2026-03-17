@@ -12,6 +12,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/testutils"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -885,17 +886,17 @@ func Test_prepareGatewayConditionUpdate(t *testing.T) {
 func Test_generateRouteList(t *testing.T) {
 	testCases := []struct {
 		name     string
-		routes   map[int32][]routeutils.RouteDescriptor
+		routes   map[int32][]routedescriptor.RouteDescriptor
 		expected string
 	}{
 		{
 			name:     "no routes",
-			routes:   make(map[int32][]routeutils.RouteDescriptor),
+			routes:   make(map[int32][]routedescriptor.RouteDescriptor),
 			expected: "",
 		},
 		{
 			name: "some routes",
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				1: {
 					&routeutils.MockRoute{
 						Name:      "1-1-r",

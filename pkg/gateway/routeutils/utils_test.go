@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/testutils"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -21,7 +22,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-var _ RouteDescriptor = &mockPreLoadRouteDescriptor{}
+var _ backendutils.RouteDescriptor = &mockPreLoadRouteDescriptor{}
 
 // Mock implementations
 type mockPreLoadRouteDescriptor struct {
@@ -93,7 +94,7 @@ func (m mockPreLoadRouteDescriptor) setCompatibleHostnamesByPort(hostnamesByPort
 	}
 }
 
-func (m mockPreLoadRouteDescriptor) loadAttachedRules(context context.Context, k8sClient client.Client, gatewayDefaultTGConfig *elbv2gw.TargetGroupConfiguration) (RouteDescriptor, []routeLoadError) {
+func (m mockPreLoadRouteDescriptor) loadAttachedRules(context context.Context, k8sClient client.Client, gatewayDefaultTGConfig *elbv2gw.TargetGroupConfiguration) (backendutils.RouteDescriptor, []backendutils.routeLoadError) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -348,19 +349,19 @@ func Test_FilterRoutesBySvc(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		routes        []preLoadRouteDescriptor
+		routes        []backendutils.preLoadRouteDescriptor
 		service       *corev1.Service
 		expectedCount int
 	}{
 		{
 			name:          "Nil service returns nil",
-			routes:        []preLoadRouteDescriptor{},
+			routes:        []backendutils.preLoadRouteDescriptor{},
 			service:       nil,
 			expectedCount: 0,
 		},
 		{
 			name:   "Empty routes returns nil",
-			routes: []preLoadRouteDescriptor{},
+			routes: []backendutils.preLoadRouteDescriptor{},
 			service: &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      svcName,
@@ -371,7 +372,7 @@ func Test_FilterRoutesBySvc(t *testing.T) {
 		},
 		{
 			name: "Filters matching routes",
-			routes: []preLoadRouteDescriptor{
+			routes: []backendutils.preLoadRouteDescriptor{
 				mockPreLoadRouteDescriptor{
 					backendRefs: []gwv1.BackendRef{
 						{
@@ -421,7 +422,7 @@ func Test_FilterRoutesBySvc(t *testing.T) {
 func Test_IsServiceReferredByRoute(t *testing.T) {
 	tests := []struct {
 		name     string
-		route    preLoadRouteDescriptor
+		route    backendutils.preLoadRouteDescriptor
 		svcID    types.NamespacedName
 		expected bool
 	}{

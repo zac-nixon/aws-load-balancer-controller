@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/backendutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	elbv2sdk "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -35,7 +37,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 	tests := []struct {
 		name    string
 		gateway *gwv1.Gateway
-		routes  map[int32][]routeutils.RouteDescriptor
+		routes  map[int32][]routedescriptor.RouteDescriptor
 		want    map[int32]gwListenerConfig
 		wantErr bool
 	}{
@@ -312,7 +314,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 					},
 				},
 			},
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Hostnames: []string{"r1.com", "r2.com", "r3.com"},
@@ -344,7 +346,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 					},
 				},
 			},
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Hostnames: []string{"r1.com", "r2.com", "r3.com"},
@@ -381,7 +383,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 					},
 				},
 			},
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Hostnames: []string{"r1.com", "r2.com", "r3.com"},
@@ -427,7 +429,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 					},
 				},
 			},
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{},
 				},
@@ -485,7 +487,7 @@ func Test_mapGatewayListenerConfigsByPort(t *testing.T) {
 					},
 				},
 			},
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{},
 				},
@@ -1420,7 +1422,7 @@ func Test_BuildListenerRules(t *testing.T) {
 		ipAddressType    elbv2model.IPAddressType
 		port             int32
 		listenerProtocol elbv2model.Protocol
-		routes           map[int32][]routeutils.RouteDescriptor
+		routes           map[int32][]routedescriptor.RouteDescriptor
 
 		expectedRules []*elbv2model.ListenerRuleSpec
 		expectedTags  map[string]string
@@ -1431,7 +1433,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1482,7 +1484,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1500,9 +1502,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1543,7 +1545,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1570,9 +1572,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1610,7 +1612,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1637,9 +1639,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1677,7 +1679,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             90,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				90: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1705,9 +1707,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1745,7 +1747,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTP,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1763,9 +1765,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1817,7 +1819,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTPS,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -1835,9 +1837,9 @@ func Test_BuildListenerRules(t *testing.T) {
 										},
 									},
 								},
-								BackendRefs: []routeutils.Backend{
+								BackendRefs: []backendutils.Backend{
 									{
-										ServiceBackend: &routeutils.ServiceBackendConfig{},
+										ServiceBackend: &backendutils.ServiceBackendConfig{},
 										Weight:         1,
 									},
 								},
@@ -1915,7 +1917,7 @@ func Test_BuildListenerRules(t *testing.T) {
 			port:             80,
 			listenerProtocol: elbv2model.ProtocolHTTPS,
 			ipAddressType:    elbv2model.IPAddressTypeIPV4,
-			routes: map[int32][]routeutils.RouteDescriptor{
+			routes: map[int32][]routedescriptor.RouteDescriptor{
 				80: {
 					&routeutils.MockRoute{
 						Kind:      routeutils.HTTPRouteKind,
@@ -2083,18 +2085,18 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 	testCases := []struct {
 		name         string
 		targetGroups []*elbv2model.TargetGroup
-		routes       []routeutils.RouteDescriptor
+		routes       []routedescriptor.RouteDescriptor
 		expected     []tgValidation
 		expectErr    bool
 	}{
 		{
 			name:     "no routes",
-			routes:   []routeutils.RouteDescriptor{},
+			routes:   []routedescriptor.RouteDescriptor{},
 			expected: make([]tgValidation, 0),
 		},
 		{
 			name: "one route - no backends",
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{},
 			},
 			expected: make([]tgValidation, 0),
@@ -2104,11 +2106,11 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 			targetGroups: []*elbv2model.TargetGroup{
 				tgs[0],
 			},
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 1,
 								},
@@ -2130,11 +2132,11 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				tgs[0],
 				tgs[1],
 			},
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 1,
 								},
@@ -2163,18 +2165,18 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				tgs[0],
 				tgs[1],
 			},
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 1,
 								},
 							},
 						},
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 2,
 								},
@@ -2202,11 +2204,11 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				tgs[2],
 				tgs[3],
 			},
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 1,
 								},
@@ -2220,7 +2222,7 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 2,
 								},
@@ -2257,11 +2259,11 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				tgs[0],
 				tgs[1],
 			},
-			routes: []routeutils.RouteDescriptor{
+			routes: []routedescriptor.RouteDescriptor{
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 1,
 								},
@@ -2272,7 +2274,7 @@ func Test_buildL4TargetGroupTuples(t *testing.T) {
 				&routeutils.MockRoute{
 					Rules: []routeutils.RouteRule{
 						&routeutils.MockRule{
-							BackendRefs: []routeutils.Backend{
+							BackendRefs: []backendutils.Backend{
 								{
 									Weight: 2,
 								},

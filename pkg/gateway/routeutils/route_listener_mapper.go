@@ -6,6 +6,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/listener"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/routereconciler"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -13,20 +16,20 @@ import (
 // listenerToRouteMapper is an internal utility that will map a list of routes to the listeners of a gateway
 // if the gateway and/or route are incompatible, then the route is discarded.
 type listenerToRouteMapper interface {
-	mapGatewayAndRoutes(context context.Context, gw gwv1.Gateway, listeners []gwv1.Listener, routes []preLoadRouteDescriptor) (map[int][]preLoadRouteDescriptor, map[int32]map[string][]gwv1.Hostname, []RouteData, map[string][]gwv1.ParentReference, map[gwv1.SectionName]int32, error)
+	mapGatewayAndRoutes(context context.Context, gw gwv1.Gateway, listeners []gwv1.Listener, routes []backendutils.preLoadRouteDescriptor) (map[int][]backendutils.preLoadRouteDescriptor, map[int32]map[string][]gwv1.Hostname, []RouteData, map[string][]gwv1.ParentReference, map[gwv1.SectionName]int32, error)
 }
 
 var _ listenerToRouteMapper = &listenerToRouteMapperImpl{}
 
 type listenerToRouteMapperImpl struct {
-	listenerAttachmentHelper listenerAttachmentHelper
+	listenerAttachmentHelper listener.listenerAttachmentHelper
 	routeAttachmentHelper    routeAttachmentHelper
 	logger                   logr.Logger
 }
 
 func newListenerToRouteMapper(k8sClient client.Client, logger logr.Logger) listenerToRouteMapper {
 	return &listenerToRouteMapperImpl{
-		listenerAttachmentHelper: newListenerAttachmentHelper(k8sClient, logger.WithName("listener-attachment-helper")),
+		listenerAttachmentHelper: listener.newListenerAttachmentHelper(k8sClient, logger.WithName("listener-attachment-helper")),
 		routeAttachmentHelper:    newRouteAttachmentHelper(logger.WithName("route-attachment-helper")),
 		logger:                   logger,
 	}
@@ -34,12 +37,12 @@ func newListenerToRouteMapper(k8sClient client.Client, logger logr.Logger) liste
 
 // mapGatewayAndRoutes will map route to the corresponding listener ports using the Gateway API spec rules.
 // Returns: (routesByPort, compatibleHostnamesByPort, failedRoutes, matchedParentRefs, error)
-func (ltr *listenerToRouteMapperImpl) mapGatewayAndRoutes(ctx context.Context, gw gwv1.Gateway, listeners []gwv1.Listener, routes []preLoadRouteDescriptor) (map[int][]preLoadRouteDescriptor, map[int32]map[string][]gwv1.Hostname, []RouteData, map[string][]gwv1.ParentReference, map[gwv1.SectionName]int32, error) {
-	result := make(map[int][]preLoadRouteDescriptor)
+func (ltr *listenerToRouteMapperImpl) mapGatewayAndRoutes(ctx context.Context, gw gwv1.Gateway, listeners []gwv1.Listener, routes []backendutils.preLoadRouteDescriptor) (map[int][]backendutils.preLoadRouteDescriptor, map[int32]map[string][]gwv1.Hostname, []RouteData, map[string][]gwv1.ParentReference, map[gwv1.SectionName]int32, error) {
+	result := make(map[int][]backendutils.preLoadRouteDescriptor)
 	compatibleHostnamesByPort := make(map[int32]map[string][]gwv1.Hostname)
 
 	// First filter out any routes that are not intended for this Gateway.
-	routesForGateway := make([]preLoadRouteDescriptor, 0)
+	routesForGateway := make([]backendutils.preLoadRouteDescriptor, 0)
 	for _, route := range routes {
 		allowsAttachment := ltr.routeAttachmentHelper.doesRouteAttachToGateway(gw, route)
 		ltr.logger.V(1).Info("Route is eligible for attachment", "route", route.GetRouteNamespacedName(), "allowed attachment", allowsAttachment)
@@ -150,7 +153,7 @@ func (ltr *listenerToRouteMapperImpl) mapGatewayAndRoutes(ctx context.Context, g
 
 			parentRefKey := getParentRefKey(parentRef, gw)
 			if _, matched := parentRefsMatchedListener[routeKey][parentRefKey]; !matched {
-				rd := GenerateRouteData(false, true, string(gwv1.RouteReasonNoMatchingParent), RouteStatusInfoRejectedMessageParentNotMatch, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw, parentRef.Port, parentRef.SectionName)
+				rd := routereconciler.GenerateRouteData(false, true, string(gwv1.RouteReasonNoMatchingParent), routereconciler.RouteStatusInfoRejectedMessageParentNotMatch, route.GetRouteNamespacedName(), route.GetRouteKind(), route.GetRouteGeneration(), gw, parentRef.Port, parentRef.SectionName)
 				failedRoutesMap[routeKey] = append(failedRoutesMap[routeKey], rd)
 			}
 		}

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gateway_constants "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/listener"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -16,7 +16,7 @@ func Test_buildListenerStatus(t *testing.T) {
 		name                    string
 		gateway                 gwv1.Gateway
 		attachedRoutesMap       map[gwv1.SectionName]int32
-		validateListenerResults routeutils.ListenerValidationResults
+		validateListenerResults listener.ListenerValidationResults
 		supportedKinds          []gwv1.RouteGroupKind
 		isProgrammed            bool
 		expectedListenerCount   int
@@ -37,8 +37,8 @@ func Test_buildListenerStatus(t *testing.T) {
 				},
 			},
 			attachedRoutesMap: map[gwv1.SectionName]int32{"listener1": 1},
-			validateListenerResults: routeutils.ListenerValidationResults{
-				Results: map[gwv1.SectionName]routeutils.ListenerValidationResult{
+			validateListenerResults: listener.ListenerValidationResults{
+				Results: map[gwv1.SectionName]listener.ListenerValidationResult{
 					"listener1": {Reason: gwv1.ListenerReasonAccepted, Message: "accepted", SupportedKinds: []gwv1.RouteGroupKind{{
 						Kind: "HTTPRoute",
 					}}},
@@ -59,7 +59,7 @@ func Test_buildListenerStatus(t *testing.T) {
 				},
 			},
 			attachedRoutesMap:       map[gwv1.SectionName]int32{},
-			validateListenerResults: routeutils.ListenerValidationResults{},
+			validateListenerResults: listener.ListenerValidationResults{},
 			isProgrammed:            true,
 			expectedListenerCount:   0,
 		},
@@ -84,7 +84,7 @@ func Test_buildListenerStatus(t *testing.T) {
 func Test_getListenerConditions(t *testing.T) {
 	tests := []struct {
 		name                     string
-		listenerValidationResult routeutils.ListenerValidationResult
+		listenerValidationResult listener.ListenerValidationResult
 		isProgrammed             bool
 		expectedConditionCount   int
 		expectedConflictReason   string
@@ -95,7 +95,7 @@ func Test_getListenerConditions(t *testing.T) {
 	}{
 		{
 			name: "validation result with hostname conflict and programmed false",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonHostnameConflict,
 				Message: "Hostname conflict",
 			},
@@ -111,7 +111,7 @@ func Test_getListenerConditions(t *testing.T) {
 		},
 		{
 			name: "validation result with protocol conflict",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonProtocolConflict,
 				Message: "Protocol conflict",
 			},
@@ -127,7 +127,7 @@ func Test_getListenerConditions(t *testing.T) {
 		},
 		{
 			name: "validation result with port unavailable",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonPortUnavailable,
 				Message: "Port unavailable",
 			},
@@ -143,7 +143,7 @@ func Test_getListenerConditions(t *testing.T) {
 		},
 		{
 			name: "validation result with unsupported protocol",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonUnsupportedProtocol,
 				Message: "Unsupported protocol",
 			},
@@ -159,7 +159,7 @@ func Test_getListenerConditions(t *testing.T) {
 		},
 		{
 			name: "validation result with invalid route kinds",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonInvalidRouteKinds,
 				Message: "Invalid route kinds",
 			},
@@ -175,7 +175,7 @@ func Test_getListenerConditions(t *testing.T) {
 		},
 		{
 			name: "validation result with ref not permitted",
-			listenerValidationResult: routeutils.ListenerValidationResult{
+			listenerValidationResult: listener.ListenerValidationResult{
 				Reason:  gwv1.ListenerReasonRefNotPermitted,
 				Message: "Ref not permitted",
 			},

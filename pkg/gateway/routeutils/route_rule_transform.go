@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -13,7 +14,7 @@ const (
 	replaceWholePathMinusQueryParamsRegex = "^([^?]*)"
 )
 
-func BuildRoutingRuleTransforms(gwRoute RouteDescriptor, gwRule RulePrecedence) []elbv2model.Transform {
+func BuildRoutingRuleTransforms(gwRoute backendutils.RouteDescriptor, gwRule RulePrecedence) []elbv2model.Transform {
 	switch gwRoute.GetRouteKind() {
 	case HTTPRouteKind:
 		return buildHTTPRuleTransforms(gwRule.CommonRulePrecedence.Rule.GetRawRouteRule().(*gwv1.HTTPRouteRule), gwRule.HTTPMatch)

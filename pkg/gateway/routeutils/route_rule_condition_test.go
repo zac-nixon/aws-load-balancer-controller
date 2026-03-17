@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/backendutils"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -953,7 +954,7 @@ func (m *mockRouteRule) GetRawRouteRule() interface{} {
 	panic("implement me")
 }
 
-func (m *mockRouteRule) GetBackends() []Backend {
+func (m *mockRouteRule) GetBackends() []backendutils.Backend {
 	//TODO implement me
 	panic("implement me")
 }

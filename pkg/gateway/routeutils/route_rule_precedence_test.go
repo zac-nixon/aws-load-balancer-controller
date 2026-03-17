@@ -8,6 +8,7 @@ import (
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -17,7 +18,7 @@ var (
 
 func Test_SortAllRulesByPrecedence(t *testing.T) {
 
-	httpOneRuleNoMatch := &httpRouteDescription{
+	httpOneRuleNoMatch := &backendutils.httpRouteDescription{
 		route: &gwv1.HTTPRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "httpOneRuleNoMatch",
@@ -25,13 +26,13 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedHTTPRouteRule{
+			&backendutils.convertedHTTPRouteRule{
 				rule: &gwv1.HTTPRouteRule{},
 			},
 		},
 	}
 
-	httpOneRuleOneMatch := &httpRouteDescription{
+	httpOneRuleOneMatch := &backendutils.httpRouteDescription{
 		route: &gwv1.HTTPRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "httpOneRuleOneMatch",
@@ -39,7 +40,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedHTTPRouteRule{
+			&backendutils.convertedHTTPRouteRule{
 				rule: &gwv1.HTTPRouteRule{
 					Matches: []gwv1.HTTPRouteMatch{
 						{
@@ -54,7 +55,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 	}
 
-	httpOneRuleMultipleMatches := &httpRouteDescription{
+	httpOneRuleMultipleMatches := &backendutils.httpRouteDescription{
 		route: &gwv1.HTTPRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "httpOneRuleMultipleMatches",
@@ -62,7 +63,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedHTTPRouteRule{
+			&backendutils.convertedHTTPRouteRule{
 				rule: &gwv1.HTTPRouteRule{
 					Matches: []gwv1.HTTPRouteMatch{
 						{
@@ -83,7 +84,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 	}
 
-	grpcOneRuleNoMatch := &grpcRouteDescription{
+	grpcOneRuleNoMatch := &backendutils.grpcRouteDescription{
 		route: &gwv1.GRPCRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "grpcOneRuleNoMatch",
@@ -91,13 +92,13 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedGRPCRouteRule{
+			&backendutils.convertedGRPCRouteRule{
 				rule: &gwv1.GRPCRouteRule{},
 			},
 		},
 	}
 
-	grpcOneRuleOneMatch := &grpcRouteDescription{
+	grpcOneRuleOneMatch := &backendutils.grpcRouteDescription{
 		route: &gwv1.GRPCRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "grpcOneRuleOneMatch",
@@ -105,7 +106,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedGRPCRouteRule{
+			&backendutils.convertedGRPCRouteRule{
 				rule: &gwv1.GRPCRouteRule{
 					Matches: []gwv1.GRPCRouteMatch{
 						{
@@ -121,7 +122,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 	}
 
-	grpcOneRuleMultipleMatches := &grpcRouteDescription{
+	grpcOneRuleMultipleMatches := &backendutils.grpcRouteDescription{
 		route: &gwv1.GRPCRoute{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "grpcOneRuleMultipleMatches",
@@ -129,7 +130,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 			},
 		},
 		rules: []RouteRule{
-			&convertedGRPCRouteRule{
+			&backendutils.convertedGRPCRouteRule{
 				rule: &gwv1.GRPCRouteRule{
 					Matches: []gwv1.GRPCRouteMatch{
 						{
@@ -153,18 +154,18 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 	}
 	testCases := []struct {
 		name   string
-		input  []RouteDescriptor
+		input  []backendutils.RouteDescriptor
 		output []RulePrecedence
 		port   int32
 	}{
 		{
 			name:  "no routes",
-			input: make([]RouteDescriptor, 0),
+			input: make([]backendutils.RouteDescriptor, 0),
 		},
 		{
 			name: "one http route, no rules attached",
-			input: []RouteDescriptor{
-				&httpRouteDescription{
+			input: []backendutils.RouteDescriptor{
+				&backendutils.httpRouteDescription{
 					route: &gwv1.HTTPRoute{
 						ObjectMeta: v1.ObjectMeta{
 							Name:      "http1",
@@ -176,7 +177,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one http route, one rule attached",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				httpOneRuleNoMatch,
 			},
 			output: []RulePrecedence{
@@ -197,7 +198,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one http route, one rule attached with match",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				httpOneRuleOneMatch,
 			},
 			output: []RulePrecedence{
@@ -226,7 +227,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one http route, one rule attached with multiple matches",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				httpOneRuleMultipleMatches,
 			},
 			output: []RulePrecedence{
@@ -276,8 +277,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one grpc route, no rules attached",
-			input: []RouteDescriptor{
-				&grpcRouteDescription{
+			input: []backendutils.RouteDescriptor{
+				&backendutils.grpcRouteDescription{
 					route: &gwv1.GRPCRoute{
 						ObjectMeta: v1.ObjectMeta{
 							Name:      "grpc1",
@@ -289,7 +290,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one grpc route, one rule attached",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				grpcOneRuleNoMatch,
 			},
 			output: []RulePrecedence{
@@ -310,7 +311,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one grpc route, one rule attached with match",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				grpcOneRuleOneMatch,
 			},
 			output: []RulePrecedence{
@@ -341,7 +342,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 		},
 		{
 			name: "one grpc route, one rule attached with multiple matches",
-			input: []RouteDescriptor{
+			input: []backendutils.RouteDescriptor{
 				grpcOneRuleMultipleMatches,
 			},
 			output: []RulePrecedence{

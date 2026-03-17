@@ -2,7 +2,8 @@ package model
 
 import (
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/backendutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	elbv2modelk8s "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2/k8s"
@@ -20,7 +21,7 @@ func (m *mockTargetGroupBuilder) getLocalFrontendNlbData() map[string]*elbv2mode
 }
 
 func (m *mockTargetGroupBuilder) buildTargetGroup(stack core.Stack,
-	gw *gwv1.Gateway, listenerPort int32, listenerProtocol elbv2model.Protocol, lbIPType elbv2model.IPAddressType, routeDescriptor routeutils.RouteDescriptor, backend routeutils.Backend) (core.StringToken, error) {
+	gw *gwv1.Gateway, listenerPort int32, listenerProtocol elbv2model.Protocol, lbIPType elbv2model.IPAddressType, routeDescriptor routedescriptor.RouteDescriptor, backend backendutils.Backend) (core.StringToken, error) {
 	var tg *elbv2model.TargetGroup
 
 	if len(m.tgs) > 0 {

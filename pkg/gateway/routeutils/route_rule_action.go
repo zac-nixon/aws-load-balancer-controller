@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/shared_constants"
@@ -20,7 +21,7 @@ import (
 
 // BuildRulePreRoutingAction returns pre-routing action for rule
 // The assumption is that the ListenerRuleConfiguration CRD makes sure we only have one of the actions (authenticate-cognito, authenticate-oidc, jwt-validation) defined
-func BuildRulePreRoutingAction(ctx context.Context, route RouteDescriptor, crdPreRoutingAction *elbv2gw.Action, k8sClient client.Client, secretsManager k8s.SecretsManager) (*elbv2model.Action, *types.NamespacedName, error) {
+func BuildRulePreRoutingAction(ctx context.Context, route backendutils.RouteDescriptor, crdPreRoutingAction *elbv2gw.Action, k8sClient client.Client, secretsManager k8s.SecretsManager) (*elbv2model.Action, *types.NamespacedName, error) {
 	switch crdPreRoutingAction.Type {
 	case elbv2gw.ActionTypeAuthenticateOIDC:
 		return buildAuthenticateOIDCAction(ctx, crdPreRoutingAction.AuthenticateOIDCConfig, route, k8sClient, secretsManager)
@@ -34,7 +35,7 @@ func BuildRulePreRoutingAction(ctx context.Context, route RouteDescriptor, crdPr
 
 // BuildRuleRoutingAction returns routing action for rule
 // The assumption is that the ListenerRuleConfiguration CRD makes sure we only have one of the actions (forward, redirect, fixed-response) defined
-func BuildRuleRoutingAction(rule RouteRule, route RouteDescriptor, routingAction *elbv2gw.Action, targetGroupTuples []elbv2model.TargetGroupTuple) (*elbv2model.Action, error) {
+func BuildRuleRoutingAction(rule RouteRule, route backendutils.RouteDescriptor, routingAction *elbv2gw.Action, targetGroupTuples []elbv2model.TargetGroupTuple) (*elbv2model.Action, error) {
 	var action *elbv2model.Action
 	// Build Rule Routing Actions - Fixed Response
 	if routingAction != nil && routingAction.Type == elbv2gw.ActionTypeFixedResponse {
@@ -118,7 +119,7 @@ func buildAuthenticateCognitoAction(authCognitoActionConfig *elbv2gw.Authenticat
 	return action, nil, nil
 }
 
-func buildAuthenticateOIDCAction(ctx context.Context, authenticateOIDCActionConfig *elbv2gw.AuthenticateOidcActionConfig, route RouteDescriptor, k8sClient client.Client, secretsManager k8s.SecretsManager) (*elbv2model.Action, *types.NamespacedName, error) {
+func buildAuthenticateOIDCAction(ctx context.Context, authenticateOIDCActionConfig *elbv2gw.AuthenticateOidcActionConfig, route backendutils.RouteDescriptor, k8sClient client.Client, secretsManager k8s.SecretsManager) (*elbv2model.Action, *types.NamespacedName, error) {
 	namespace := route.GetRouteNamespacedName().Namespace
 	secretKey := types.NamespacedName{
 		Namespace: namespace,
@@ -180,7 +181,7 @@ func buildForwardRoutingAction(routingAction *elbv2gw.Action, targetGroupTuples 
 // buildRedirectRoutingAction
 // For HTTPRoute: handle RequestRedirect from HTTPRouteFilterType
 // For GRPCRoute: do not support any filter type other than ExtensionRef, which can be used to refer a listener rule configuration CRD
-func buildRedirectRoutingAction(rule RouteRule, route RouteDescriptor, routingAction *elbv2gw.Action) (*elbv2model.Action, error) {
+func buildRedirectRoutingAction(rule RouteRule, route backendutils.RouteDescriptor, routingAction *elbv2gw.Action) (*elbv2model.Action, error) {
 	switch route.GetRouteKind() {
 	case HTTPRouteKind:
 		httpRule := rule.GetRawRouteRule().(*gwv1.HTTPRouteRule)

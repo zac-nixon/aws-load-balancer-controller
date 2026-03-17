@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/routereconciler"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwalpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -27,7 +28,7 @@ type routeReconcilerImpl struct {
 
 // NewRouteReconciler
 // This is responsible for handling status update for Route resources
-func NewRouteReconciler(queue workqueue.DelayingInterface, k8sClient client.Client, logger logr.Logger) routeutils.RouteReconciler {
+func NewRouteReconciler(queue workqueue.DelayingInterface, k8sClient client.Client, logger logr.Logger) routereconciler.RouteReconciler {
 	return &routeReconcilerImpl{
 		logger:    logger,
 		queue:     queue,
@@ -280,7 +281,7 @@ func (d *routeReconcilerImpl) setConditionsBasedOnResolveRefGateway(route client
 		{
 			Type:               string(gwv1.RouteConditionAccepted),
 			Status:             metav1.ConditionFalse,
-			Reason:             routeutils.RouteStatusInfoRejectedParentRefNotExist,
+			Reason:             routereconciler.RouteStatusInfoRejectedParentRefNotExist,
 			Message:            resolveErr.Error(),
 			LastTransitionTime: timeNow,
 			ObservedGeneration: route.GetGeneration(),

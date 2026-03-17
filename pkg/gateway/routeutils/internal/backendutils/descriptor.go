@@ -1,0 +1,59 @@
+package backendutils
+
+import (
+	"context"
+	"time"
+
+	"k8s.io/apimachinery/pkg/types"
+	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+)
+
+// RouteMetadataDescriptor a common set of functions that will describe a route.
+// These are intentionally meant to be type agnostic;
+// however, consumers can use `GetRawRoute()` to inspect the actual route fields if needed.
+type RouteMetadataDescriptor interface {
+	GetRouteNamespacedName() types.NamespacedName
+	GetRouteKind() constants.RouteKind
+	GetRouteIdentifier() string
+	GetHostnames() []gwv1.Hostname
+	GetParentRefs() []gwv1.ParentReference
+	GetRawRoute() interface{}
+	GetBackendRefs() []gwv1.BackendRef
+	GetRouteListenerRuleConfigRefs() []gwv1.LocalObjectReference
+	GetRouteGeneration() int64
+	GetRouteCreateTimestamp() time.Time
+	// GetCompatibleHostnamesByPort returns the compatible hostnames for each listener port.
+	// Compatible hostnames are computed during route attachment by intersecting listener hostnames
+	// with route hostnames (considering wildcards). The map key is the listener port number.
+	// When a route attaches to multiple listeners on the same port, hostnames are aggregated.
+	// When a route attaches to listeners on different ports, each port has its own hostname list.
+	GetCompatibleHostnamesByPort() map[int32][]gwv1.Hostname
+	// setCompatibleHostnamesByPort is a package-private method to set compatible hostnames.
+	// This is called by the loader after route attachment validation.
+	setCompatibleHostnamesByPort(map[int32][]gwv1.Hostname)
+}
+
+type RouteLoadError struct {
+	Err   error
+	Fatal bool
+}
+
+// PreLoadRouteDescriptor this object is used to represent a route description that has not loaded its child data (services, tg config)
+// generally use this interface to represent broad data, filter that data down to the absolutely required data, and the call
+// loadAttachedRules() to generate a full route description.
+type PreLoadRouteDescriptor interface {
+	RouteMetadataDescriptor
+	loadAttachedRules(context context.Context, k8sClient client.Client, gatewayDefaultTGConfig *elbv2gw.TargetGroupConfiguration) (RouteDescriptor, []routeLoadError)
+}
+
+// RouteDescriptor is a type agnostic representation of a Gateway Route.
+// This interface holds all data necessary to construct
+// an ELBv2 object out of Kubernetes objects.
+type RouteDescriptor interface {
+	RouteMetadataDescriptor
+	GetAttachedRules() []routeutils.RouteRule
+}

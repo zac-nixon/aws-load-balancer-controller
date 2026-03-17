@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -14,7 +15,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 	testCases := []struct {
 		name   string
 		gw     gwv1.Gateway
-		route  preLoadRouteDescriptor
+		route  backendutils.preLoadRouteDescriptor
 		result bool
 	}{
 		{
@@ -25,7 +26,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "route",
 					Namespace: "ns1",
@@ -50,7 +51,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "route",
 					Namespace: "ns1",
@@ -76,7 +77,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -99,7 +100,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -137,7 +138,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -174,7 +175,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -196,7 +197,7 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 					Namespace: "ns1",
 				},
 			},
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -211,11 +212,11 @@ func Test_doesRouteAttachToGateway(t *testing.T) {
 		},
 		{
 			name:  "no parent refs",
-			route: convertHTTPRoute(gwv1.HTTPRoute{}),
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{}),
 		},
 		{
 			name: "parent ref has non gateway kind",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -249,13 +250,13 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 	testCases := []struct {
 		name                string
 		listener            gwv1.Listener
-		route               preLoadRouteDescriptor
+		route               backendutils.preLoadRouteDescriptor
 		result              bool
 		expectMatchedParent bool
 	}{
 		{
 			name: "allows attachment section and port correct",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns1",
 				},
@@ -280,7 +281,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "allows attachment section specified",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns1",
 				},
@@ -304,7 +305,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "allows attachment port specified",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns1",
 				},
@@ -328,7 +329,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "multiple parent refs one ref allows attachment",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "ns1",
 				},
@@ -368,7 +369,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "multiple parent refs one ref none attachment",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -401,7 +402,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "section name mismatch",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{
@@ -421,7 +422,7 @@ func Test_routeAllowsAttachmentToListener(t *testing.T) {
 		},
 		{
 			name: "port mismatch",
-			route: convertHTTPRoute(gwv1.HTTPRoute{
+			route: backendutils.convertHTTPRoute(gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{
 						ParentRefs: []gwv1.ParentReference{

@@ -7,11 +7,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gateway_constants "sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/constants"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/listener"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func buildListenerStatus(gateway gwv1.Gateway, listeners []gwv1.Listener, attachedRoutesMap map[gwv1.SectionName]int32, validateListenerResults routeutils.ListenerValidationResults, isProgrammed bool) []gwv1.ListenerStatus {
+func buildListenerStatus(gateway gwv1.Gateway, listeners []gwv1.Listener, attachedRoutesMap map[gwv1.SectionName]int32, validateListenerResults listener.ListenerValidationResults, isProgrammed bool) []gwv1.ListenerStatus {
 	var listenerStatuses []gwv1.ListenerStatus
 
 	for _, listener := range listeners {
@@ -29,7 +29,7 @@ func buildListenerStatus(gateway gwv1.Gateway, listeners []gwv1.Listener, attach
 	return listenerStatuses
 }
 
-func getListenerConditions(gw gwv1.Gateway, listenerValidationResult routeutils.ListenerValidationResult, isProgrammed bool) []metav1.Condition {
+func getListenerConditions(gw gwv1.Gateway, listenerValidationResult listener.ListenerValidationResult, isProgrammed bool) []metav1.Condition {
 	var conditions []metav1.Condition
 
 	// Default

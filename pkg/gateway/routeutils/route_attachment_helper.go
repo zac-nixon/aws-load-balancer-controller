@@ -2,13 +2,15 @@ package routeutils
 
 import (
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/attachmentutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // routeAttachmentHelper is an internal utility that is responsible for providing functionality related to route filtering.
 type routeAttachmentHelper interface {
-	doesRouteAttachToGateway(gw gwv1.Gateway, route preLoadRouteDescriptor) bool
-	routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, *gwv1.ParentReference)
+	doesRouteAttachToGateway(gw gwv1.Gateway, route backendutils.preLoadRouteDescriptor) bool
+	routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route backendutils.preLoadRouteDescriptor) (bool, *gwv1.ParentReference)
 }
 
 var _ routeAttachmentHelper = &routeAttachmentHelperImpl{}
@@ -25,9 +27,9 @@ func newRouteAttachmentHelper(logger logr.Logger) routeAttachmentHelper {
 
 // doesRouteAttachToGateway is responsible for determining if a route and gateway should be connected.
 // This function implements the Gateway API spec for determining Gateway -> Route attachment.
-func (rah *routeAttachmentHelperImpl) doesRouteAttachToGateway(gw gwv1.Gateway, route preLoadRouteDescriptor) bool {
+func (rah *routeAttachmentHelperImpl) doesRouteAttachToGateway(gw gwv1.Gateway, route backendutils.preLoadRouteDescriptor) bool {
 	for _, parentRef := range route.GetParentRefs() {
-		attach := doesResourceAttachToGateway(parentRef, route.GetRouteNamespacedName().Namespace, gw)
+		attach := attachmentutils.doesResourceAttachToGateway(parentRef, route.GetRouteNamespacedName().Namespace, gw)
 		if attach {
 			return true
 		}
@@ -42,9 +44,9 @@ func (rah *routeAttachmentHelperImpl) doesRouteAttachToGateway(gw gwv1.Gateway, 
 // This function assumes that the caller has already validated that the gateway that owns the listener allows for route
 // attachment.
 // Returns: (allowed, matchedParentRef)
-func (rah *routeAttachmentHelperImpl) routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route preLoadRouteDescriptor) (bool, *gwv1.ParentReference) {
+func (rah *routeAttachmentHelperImpl) routeAllowsAttachmentToListener(gw gwv1.Gateway, listener gwv1.Listener, route backendutils.preLoadRouteDescriptor) (bool, *gwv1.ParentReference) {
 	for _, parentRef := range route.GetParentRefs() {
-		attach := doesResourceAttachToGateway(parentRef, route.GetRouteNamespacedName().Namespace, gw)
+		attach := attachmentutils.doesResourceAttachToGateway(parentRef, route.GetRouteNamespacedName().Namespace, gw)
 		if !attach {
 			continue
 		}

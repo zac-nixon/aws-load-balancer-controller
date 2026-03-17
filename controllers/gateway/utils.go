@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -169,7 +169,7 @@ func deriveAcceptedConditionIndex(gwClass *gwv1.GatewayClass) (int, bool) {
 // generateRouteList generate a deterministic route list.
 //
 //	Due to the nature of golang maps, we need to sort the keys and for good measure we sort the route descriptors too
-func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) string {
+func generateRouteList(listenerRoutes map[int32][]routedescriptor.RouteDescriptor) string {
 
 	allRoutes := make([]string, 0)
 
@@ -184,7 +184,7 @@ func generateRouteList(listenerRoutes map[int32][]routeutils.RouteDescriptor) st
 	return strings.Join(allRoutes, ",")
 }
 
-func getServicesFromRoutes(listenerRouteMap map[int32][]routeutils.RouteDescriptor) []types.NamespacedName {
+func getServicesFromRoutes(listenerRouteMap map[int32][]routedescriptor.RouteDescriptor) []types.NamespacedName {
 	res := sets.New[types.NamespacedName]()
 
 	for _, routes := range listenerRouteMap {

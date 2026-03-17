@@ -2,6 +2,8 @@ package model
 
 import (
 	"context"
+	"testing"
+
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -13,6 +15,8 @@ import (
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/backendutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/core"
 	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
@@ -20,7 +24,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/shared_constants"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/shared_utils"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	"testing"
 )
 
 func Test_buildTargetGroupSpec(t *testing.T) {
@@ -33,7 +36,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 		defaultTargetType        string
 		gateway                  *gwv1.Gateway
 		route                    *routeutils.MockRoute
-		backend                  *routeutils.ServiceBackendConfig
+		backend                  *backendutils.ServiceBackendConfig
 		tagErr                   error
 		expectErr                bool
 		expectedTgSpec           elbv2model.TargetGroupSpec
@@ -55,7 +58,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -110,7 +113,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -170,7 +173,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -225,7 +228,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -286,7 +289,7 @@ func Test_buildTargetGroupSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -341,7 +344,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 		defaultTargetType     string
 		gateway               *gwv1.Gateway
 		route                 *routeutils.MockRoute
-		backend               *routeutils.ServiceBackendConfig
+		backend               *backendutils.ServiceBackendConfig
 		tagErr                error
 		expectErr             bool
 		expectedTgSpec        elbv2model.TargetGroupSpec
@@ -363,7 +366,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -438,7 +441,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -518,7 +521,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -593,7 +596,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -683,7 +686,7 @@ func Test_buildTargetGroupBindingSpec(t *testing.T) {
 				Name:      "my-route",
 				Namespace: "my-route-ns",
 			},
-			backend: routeutils.NewServiceBackendConfig(
+			backend: backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "my-svc-ns",
@@ -902,7 +905,7 @@ func Test_buildTargetGroupIPAddressType(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := targetGroupBuilderImpl{}
-			res, err := builder.buildTargetGroupIPAddressType(routeutils.NewServiceBackendConfig(tc.svc, nil, nil), tc.loadBalancerIPAddressType)
+			res, err := builder.buildTargetGroupIPAddressType(backendutils.NewServiceBackendConfig(tc.svc, nil, nil), tc.loadBalancerIPAddressType)
 			if tc.expectErr {
 				assert.Error(t, err)
 				return
@@ -920,7 +923,7 @@ func Test_buildTargetGroupProtocol(t *testing.T) {
 		listenerProtocol elbv2model.Protocol
 		lbType           elbv2model.LoadBalancerType
 		targetGroupProps *elbv2gw.TargetGroupProps
-		route            routeutils.RouteDescriptor
+		route            routedescriptor.RouteDescriptor
 		expected         elbv2model.Protocol
 		expectErr        bool
 	}{
@@ -1172,9 +1175,9 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 	testCases := []struct {
 		name             string
 		loadBalancerType elbv2model.LoadBalancerType
-		tgConfigurator   routeutils.TargetGroupConfigurator
+		tgConfigurator   backendutils.TargetGroupConfigurator
 		listenerProtocol elbv2model.Protocol
-		route            routeutils.RouteDescriptor
+		route            routedescriptor.RouteDescriptor
 		targetGroupProps *elbv2gw.TargetGroupProps
 		expected         *elbv2model.ProtocolVersion
 	}{
@@ -1182,7 +1185,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 			name:             "nlb - no props",
 			loadBalancerType: elbv2model.LoadBalancerTypeNetwork,
 			listenerProtocol: elbv2model.ProtocolTCP,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1196,7 +1199,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 			name:             "nlb - with props",
 			loadBalancerType: elbv2model.LoadBalancerTypeNetwork,
 			listenerProtocol: elbv2model.ProtocolTCP,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1212,7 +1215,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - no props",
 			listenerProtocol: elbv2model.ProtocolHTTPS,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1227,7 +1230,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - no props - grpc",
 			listenerProtocol: elbv2model.ProtocolHTTPS,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1242,7 +1245,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - with props",
 			listenerProtocol: elbv2model.ProtocolHTTPS,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1260,7 +1263,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - with props - http protocol",
 			listenerProtocol: elbv2model.ProtocolHTTP,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol: corev1.ProtocolTCP,
 				Port:     80,
 				TargetPort: intstr.IntOrString{
@@ -1278,7 +1281,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - pv found on svc port - http listener",
 			listenerProtocol: elbv2model.ProtocolHTTP,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol:    corev1.ProtocolTCP,
 				Port:        80,
 				AppProtocol: awssdk.String("kubernetes.io/h2c"),
@@ -1294,7 +1297,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - pv found on svc port - https listener",
 			listenerProtocol: elbv2model.ProtocolHTTPS,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol:    corev1.ProtocolTCP,
 				Port:        80,
 				AppProtocol: awssdk.String("kubernetes.io/h2c"),
@@ -1310,7 +1313,7 @@ func Test_buildTargetGroupProtocolVersion(t *testing.T) {
 		{
 			name:             "alb - unknown pv found on svc port - https listener",
 			listenerProtocol: elbv2model.ProtocolHTTPS,
-			tgConfigurator: routeutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
+			tgConfigurator: backendutils.NewServiceBackendConfig(nil, nil, &corev1.ServicePort{
 				Protocol:    corev1.ProtocolTCP,
 				Port:        80,
 				AppProtocol: awssdk.String("foo"),
@@ -1699,7 +1702,7 @@ func Test_buildTargetGroupFromStaticName(t *testing.T) {
 		targetGroupNameToArnMapper: mockMapper,
 	}
 
-	cfg := routeutils.LiteralTargetGroupConfig{Name: "foo"}
+	cfg := backendutils.LiteralTargetGroupConfig{Name: "foo"}
 
 	result, err := impl.buildTargetGroupFromStaticName(cfg)
 	assert.Nil(t, err)
@@ -1784,7 +1787,7 @@ func Test_buildTargetGroupTags(t *testing.T) {
 				Namespace: "test-namespace",
 			}
 
-			backend := routeutils.NewServiceBackendConfig(
+			backend := backendutils.NewServiceBackendConfig(
 				&corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
@@ -1830,7 +1833,7 @@ func Test_buildTargetGroupFromGateway(t *testing.T) {
 		listenerPort         int32
 		lbIPType             elbv2model.IPAddressType
 		route                *routeutils.MockRoute
-		backendConfig        *routeutils.GatewayBackendConfig
+		backendConfig        *backendutils.GatewayBackendConfig
 		existingTG           bool
 		expectedTGName       string
 		expectedFrontendData bool
@@ -1850,7 +1853,7 @@ func Test_buildTargetGroupFromGateway(t *testing.T) {
 				Name:      "test-route",
 				Namespace: "test-ns",
 			},
-			backendConfig:        routeutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, nil, "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/test-alb/1234567890123456", 8080),
+			backendConfig:        backendutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, nil, "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/test-alb/1234567890123456", 8080),
 			expectedTGName:       "k8s-testns-testrout",
 			expectedFrontendData: true,
 		},
@@ -1869,7 +1872,7 @@ func Test_buildTargetGroupFromGateway(t *testing.T) {
 				Name:      "test-route",
 				Namespace: "test-ns",
 			},
-			backendConfig:        routeutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, nil, "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/test-alb/1234567890123456", 8080),
+			backendConfig:        backendutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, nil, "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/test-alb/1234567890123456", 8080),
 			existingTG:           true,
 			expectedFrontendData: false,
 		},
@@ -1888,7 +1891,7 @@ func Test_buildTargetGroupFromGateway(t *testing.T) {
 				Name:      "test-route",
 				Namespace: "test-ns",
 			},
-			backendConfig: routeutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, &elbv2gw.TargetGroupProps{
+			backendConfig: backendutils.NewGatewayBackendConfig(&gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "backend-gw", Namespace: "backend-ns"}}, &elbv2gw.TargetGroupProps{
 				TargetGroupName: awssdk.String("custom-tg-name"),
 			}, "arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/test-alb/1234567890123456", 8443),
 			expectedTGName:       "custom-tg-name",

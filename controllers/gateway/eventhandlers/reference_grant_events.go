@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -95,7 +96,7 @@ func (h *enqueueRequestsForReferenceGrantEvent) enqueueImpactedRoutes(ctx contex
 			if h.httpRouteEventChan == nil {
 				continue
 			}
-			routes, err := routeutils.ListHTTPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
+			routes, err := routedescriptor.ListHTTPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
 			if err == nil {
 				for _, route := range routes {
 					h.httpRouteEventChan <- event.TypedGenericEvent[*gatewayv1.HTTPRoute]{
@@ -110,7 +111,7 @@ func (h *enqueueRequestsForReferenceGrantEvent) enqueueImpactedRoutes(ctx contex
 			if h.grpcRouteEventChan == nil {
 				continue
 			}
-			routes, err := routeutils.ListGRPCRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
+			routes, err := routedescriptor.ListGRPCRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
 			if err == nil {
 				for _, route := range routes {
 					h.grpcRouteEventChan <- event.TypedGenericEvent[*gatewayv1.GRPCRoute]{
@@ -125,7 +126,7 @@ func (h *enqueueRequestsForReferenceGrantEvent) enqueueImpactedRoutes(ctx contex
 			if h.tcpRouteEventChan == nil {
 				continue
 			}
-			routes, err := routeutils.ListTCPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
+			routes, err := routedescriptor.ListTCPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
 			if err == nil {
 				for _, route := range routes {
 					h.tcpRouteEventChan <- event.TypedGenericEvent[*gwalpha2.TCPRoute]{
@@ -140,7 +141,7 @@ func (h *enqueueRequestsForReferenceGrantEvent) enqueueImpactedRoutes(ctx contex
 			if h.udpRouteEventChan == nil {
 				continue
 			}
-			routes, err := routeutils.ListUDPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
+			routes, err := routedescriptor.ListUDPRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
 			if err == nil {
 				for _, route := range routes {
 					h.udpRouteEventChan <- event.TypedGenericEvent[*gwalpha2.UDPRoute]{
@@ -155,7 +156,7 @@ func (h *enqueueRequestsForReferenceGrantEvent) enqueueImpactedRoutes(ctx contex
 			if h.tlsRouteEventChan == nil {
 				continue
 			}
-			routes, err := routeutils.ListTLSRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
+			routes, err := routedescriptor.ListTLSRoutes(ctx, h.k8sClient, &client.ListOptions{Namespace: string(impactedFrom.Namespace)})
 			if err == nil {
 				for _, route := range routes {
 					h.tlsRouteEventChan <- event.TypedGenericEvent[*gatewayv1.TLSRoute]{

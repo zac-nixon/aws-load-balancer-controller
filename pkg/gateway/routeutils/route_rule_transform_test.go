@@ -1,19 +1,21 @@
 package routeutils
 
 import (
+	"regexp"
+	"testing"
+
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
-	"regexp"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	"testing"
 )
 
 func Test_BuildRoutingRuleTransforms(t *testing.T) {
 	exact := gwv1.PathMatchExact
 	testCases := []struct {
 		name     string
-		route    RouteDescriptor
+		route    backendutils.RouteDescriptor
 		rule     RulePrecedence
 		expected []elbv2.Transform
 	}{
@@ -30,7 +32,7 @@ func Test_BuildRoutingRuleTransforms(t *testing.T) {
 			},
 			rule: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
-					Rule: convertHTTPRouteRule(&gwv1.HTTPRouteRule{
+					Rule: backendutils.convertHTTPRouteRule(&gwv1.HTTPRouteRule{
 						Matches: []gwv1.HTTPRouteMatch{
 							{
 								Path: &gwv1.HTTPPathMatch{
@@ -50,7 +52,7 @@ func Test_BuildRoutingRuleTransforms(t *testing.T) {
 			},
 			rule: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
-					Rule: convertHTTPRouteRule(&gwv1.HTTPRouteRule{
+					Rule: backendutils.convertHTTPRouteRule(&gwv1.HTTPRouteRule{
 						Matches: []gwv1.HTTPRouteMatch{
 							{
 								Path: &gwv1.HTTPPathMatch{
@@ -94,7 +96,7 @@ func Test_BuildRoutingRuleTransforms(t *testing.T) {
 			},
 			rule: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
-					Rule: convertHTTPRouteRule(&gwv1.HTTPRouteRule{
+					Rule: backendutils.convertHTTPRouteRule(&gwv1.HTTPRouteRule{
 						Matches: []gwv1.HTTPRouteMatch{
 							{
 								Path: &gwv1.HTTPPathMatch{
@@ -134,7 +136,7 @@ func Test_BuildRoutingRuleTransforms(t *testing.T) {
 			},
 			rule: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
-					Rule: convertHTTPRouteRule(&gwv1.HTTPRouteRule{
+					Rule: backendutils.convertHTTPRouteRule(&gwv1.HTTPRouteRule{
 						Matches: []gwv1.HTTPRouteMatch{
 							{
 								Path: &gwv1.HTTPPathMatch{

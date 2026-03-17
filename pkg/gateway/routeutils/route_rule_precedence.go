@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	v1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -35,7 +36,7 @@ type HttpSpecificRulePrecedenceFactor struct {
 }
 
 type CommonRulePrecedence struct {
-	RouteDescriptor RouteDescriptor
+	RouteDescriptor backendutils.RouteDescriptor
 	Rule            RouteRule
 
 	// common rule precedence factors
@@ -46,7 +47,7 @@ type CommonRulePrecedence struct {
 	RouteCreateTimestamp time.Time
 }
 
-func SortAllRulesByPrecedence(routes []RouteDescriptor, port int32) []RulePrecedence {
+func SortAllRulesByPrecedence(routes []backendutils.RouteDescriptor, port int32) []RulePrecedence {
 	var allRoutes []RulePrecedence
 	var httpRoutes []RulePrecedence
 	var grpcRoutes []RulePrecedence
@@ -258,7 +259,7 @@ func compareCommonTieBreakers(ruleOne RulePrecedence, ruleTwo RulePrecedence) bo
 	return ruleOne.CommonRulePrecedence.MatchIndexInRule < ruleTwo.CommonRulePrecedence.MatchIndexInRule
 }
 
-func getCommonRouteInfo(route RouteDescriptor, port int32) CommonRulePrecedence {
+func getCommonRouteInfo(route backendutils.RouteDescriptor, port int32) CommonRulePrecedence {
 	routeNamespacedName := route.GetRouteNamespacedName().String()
 	routeCreateTimestamp := route.GetRouteCreateTimestamp()
 	// Use compatible hostnames computed during route attachment

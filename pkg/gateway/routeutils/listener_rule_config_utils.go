@@ -2,9 +2,11 @@ package routeutils
 
 import (
 	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/routedescriptor"
 	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -21,11 +23,11 @@ func IsListenerRuleConfigInUse(ctx context.Context, listenerRuleConfig *elbv2gw.
 
 // FilterRoutesByListenerRuleCfg filters a slice of routes based on ListenerRuleConfiguration reference.
 // Returns a new slice containing only routes that reference the specified ListenerRuleConfiguration.
-func FilterRoutesByListenerRuleCfg(routes []preLoadRouteDescriptor, ruleConfig *elbv2gw.ListenerRuleConfiguration) []preLoadRouteDescriptor {
+func FilterRoutesByListenerRuleCfg(routes []backendutils.preLoadRouteDescriptor, ruleConfig *elbv2gw.ListenerRuleConfiguration) []backendutils.preLoadRouteDescriptor {
 	if ruleConfig == nil || len(routes) == 0 {
-		return []preLoadRouteDescriptor{}
+		return []backendutils.preLoadRouteDescriptor{}
 	}
-	filteredRoutes := make([]preLoadRouteDescriptor, 0, len(routes))
+	filteredRoutes := make([]backendutils.preLoadRouteDescriptor, 0, len(routes))
 	for _, route := range routes {
 		if isListenerRuleConfigReferredByRoute(route, k8s.NamespacedName(ruleConfig)) {
 			filteredRoutes = append(filteredRoutes, route)
@@ -35,7 +37,7 @@ func FilterRoutesByListenerRuleCfg(routes []preLoadRouteDescriptor, ruleConfig *
 }
 
 // isListenerRuleConfigReferredByRoute checks if a route references a specific ruleConfig.
-func isListenerRuleConfigReferredByRoute(route preLoadRouteDescriptor, ruleConfig types.NamespacedName) bool {
+func isListenerRuleConfigReferredByRoute(route backendutils.preLoadRouteDescriptor, ruleConfig types.NamespacedName) bool {
 	for _, config := range route.GetRouteListenerRuleConfigRefs() {
 		namespace := route.GetRouteNamespacedName().Namespace
 		if string(config.Name) == ruleConfig.Name && namespace == ruleConfig.Namespace {

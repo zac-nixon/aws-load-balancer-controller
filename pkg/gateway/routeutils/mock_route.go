@@ -5,12 +5,13 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	elbv2gw "sigs.k8s.io/aws-load-balancer-controller/apis/gateway/v1beta1"
+	"sigs.k8s.io/aws-load-balancer-controller/pkg/gateway/routeutils/internal/backendutils"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 type MockRule struct {
 	RawRule            interface{}
-	BackendRefs        []Backend
+	BackendRefs        []backendutils.Backend
 	ListenerRuleConfig *elbv2gw.ListenerRuleConfiguration
 }
 
@@ -18,7 +19,7 @@ func (m *MockRule) GetRawRouteRule() interface{} {
 	return m.RawRule
 }
 
-func (m *MockRule) GetBackends() []Backend {
+func (m *MockRule) GetBackends() []backendutils.Backend {
 	return m.BackendRefs
 }
 
@@ -101,4 +102,4 @@ func (m *MockRoute) setCompatibleHostnamesByPort(hostnamesByPort map[int32][]gwv
 	m.CompatibleHostnamesByPort = hostnamesByPort
 }
 
-var _ RouteDescriptor = &MockRoute{}
+var _ backendutils.RouteDescriptor = &MockRoute{}
