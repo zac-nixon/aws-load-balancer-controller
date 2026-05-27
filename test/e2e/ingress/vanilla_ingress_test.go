@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/shared_utils"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/shared_utils"
 
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 
@@ -22,13 +22,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/aws-load-balancer-controller/pkg/k8s"
-	elbv2model "sigs.k8s.io/aws-load-balancer-controller/pkg/model/elbv2"
-	"sigs.k8s.io/aws-load-balancer-controller/test/framework"
-	"sigs.k8s.io/aws-load-balancer-controller/test/framework/fixture"
-	"sigs.k8s.io/aws-load-balancer-controller/test/framework/manifest"
-	"sigs.k8s.io/aws-load-balancer-controller/test/framework/utils"
-	"sigs.k8s.io/aws-load-balancer-controller/test/framework/verifier"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/k8s"
+	elbv2model "sigs.k8s.io/aws-load-balancer-controller/v3/pkg/model/elbv2"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework/fixture"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework/manifest"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework/utils"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework/verifier"
 )
 
 var _ = Describe("vanilla ingress tests", func() {
