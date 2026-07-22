@@ -157,42 +157,56 @@ func getHostnamePrecedenceOrder(hostnameOne, hostnameTwo string) int {
 	}
 }
 
-// sortHostnameListByPrecedence Given a hostname list, sort it by precedence order
-func sortHostnameListByPrecedence(hostnames []string) {
-	// sort hostnames based on their precedence
-	sort.Slice(hostnames, func(i, j int) bool {
-		return getHostnamePrecedenceOrder(hostnames[i], hostnames[j]) < 0
-	})
+// mostSpecificHostname returns the highest-precedence (most specific) hostname
+// from a non-empty list without mutating the input slice. Callers must not pass
+// an empty list.
+func mostSpecificHostname(hostnames []string) string {
+	best := hostnames[0]
+	for _, h := range hostnames[1:] {
+		if getHostnamePrecedenceOrder(h, best) < 0 {
+			best = h
+		}
+	}
+	return best
 }
 
-// getHostnameListPrecedenceOrder this function tries to tiebreak two routes based on hostname precedence
-// When length of two hostname lists is not same and precedence order is not determined until the end, 0 will be return and tiebreak will continue on other attributes
+// getHostnameListPrecedenceOrder tiebreaks two routes based on hostname precedence.
+// -1 means hostnameListOne has higher precedence, 1 means hostnameListTwo has higher
+// precedence, 0 means equal (tiebreak continues on path/header/etc.).
+//
+// An empty hostname list is a catch-all: it matches every hostname and is therefore
+// the least specific, so it always has lower precedence than any non-empty list.
+//
+// For two non-empty lists, precedence is decided by the single most-specific hostname
+// each list contributes — a route is only as specific as its most specific hostname,
+// and the number of hostnames in a list does not affect how specifically any given
+// request matches. Reducing each list to one representative keeps this comparator a
+// strict weak ordering (transitive), which sort.Slice requires. The previous
+// implementation compared lists positionally and then broke ties by list length; that
+// is both non-transitive (lists of differing length that tie on their shared prefix are
+// each "equal" to a shorter list but not to each other) and semantically wrong (it lets
+// hostname-list length dominate path specificity, so a catch-all path on a route with
+// more hostnames could outrank a specific path on a route with fewer hostnames).
+// Returning 0 on a genuine tie lets precedence fall through to path/header criteria,
+// matching the Gateway API precedence ordering (matching hostname specificity, then
+// path, then headers, ...).
 func getHostnameListPrecedenceOrder(hostnameListOne, hostnameListTwo []string) int {
-	// sort each hostname list by precedence
-	sortHostnameListByPrecedence(hostnameListOne)
-	sortHostnameListByPrecedence(hostnameListTwo)
-	// compare each hostname list in order
-	length := min(len(hostnameListOne), len(hostnameListTwo))
-	for i := range length {
-		precedence := getHostnamePrecedenceOrder(hostnameListOne[i], hostnameListTwo[i])
-		if precedence != 0 {
-			return precedence
+	oneEmpty := len(hostnameListOne) == 0
+	twoEmpty := len(hostnameListTwo) == 0
+	if oneEmpty || twoEmpty {
+		switch {
+		case oneEmpty && twoEmpty:
+			return 0
+		case oneEmpty:
+			return 1 // two (non-empty) is more specific
+		default:
+			return -1 // one (non-empty) is more specific
 		}
 	}
-	// All compared hostnames tie up to the shorter list's length. A shorter list
-	// (in the extreme, an empty list as used by a catch-all route) constrains
-	// fewer hostnames and is therefore less specific, so it must have lower
-	// precedence. Without this, an empty hostname list returns 0 ("equal") and
-	// precedence falls through to path length / creation timestamp, mixing
-	// incompatible criteria and making the comparator non-transitive.
-	if len(hostnameListOne) != len(hostnameListTwo) {
-		if len(hostnameListOne) > len(hostnameListTwo) {
-			return -1 // one is more specific (more hostnames)
-		}
-		return 1 // two is more specific
-	}
-	// genuinely equal at hostname level
-	return 0
+	return getHostnamePrecedenceOrder(
+		mostSpecificHostname(hostnameListOne),
+		mostSpecificHostname(hostnameListTwo),
+	)
 }
 
 func compareHttpRulePrecedence(ruleOne RulePrecedence, ruleTwo RulePrecedence) bool {

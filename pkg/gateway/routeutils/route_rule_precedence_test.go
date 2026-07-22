@@ -1038,6 +1038,33 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 			want:   true,
 			reason: "host-specific rule outranks catch-all even when the catch-all has a longer path",
 		},
+		{
+			// Regression for the HTTPRouteMatchingAcrossRoutes conformance test:
+			// a route with more hostnames and a short (catch-all) path must not
+			// outrank a route with fewer hostnames and a longer path, because the
+			// shared most-specific hostname (example.com) ties and path decides.
+			name: "fewer hostnames with longer path beats more hostnames with shorter path",
+			ruleOne: RulePrecedence{
+				CommonRulePrecedence: CommonRulePrecedence{
+					Hostnames: []string{"example.com"},
+				},
+				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+					PathType:   2, // prefix "/v2"
+					PathLength: 3,
+				},
+			},
+			ruleTwo: RulePrecedence{
+				CommonRulePrecedence: CommonRulePrecedence{
+					Hostnames: []string{"example.com", "example.net"},
+				},
+				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+					PathType:   2, // prefix "/"
+					PathLength: 1,
+				},
+			},
+			want:   true,
+			reason: "hostname-list length must not dominate path; longer path wins when most-specific hostname ties",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1345,6 +1372,118 @@ func Test_getHostnamePrecedenceOrder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_getHostnameListPrecedenceOrder(t *testing.T) {
+	tests := []struct {
+		name        string
+		listOne     []string
+		listTwo     []string
+		want        int
+		description string
+	}{
+		{
+			name:        "both empty",
+			listOne:     []string{},
+			listTwo:     []string{},
+			want:        0,
+			description: "two catch-all (empty) lists are equal",
+		},
+		{
+			name:        "empty vs non-empty",
+			listOne:     []string{},
+			listTwo:     []string{"example.com"},
+			want:        1,
+			description: "empty (catch-all) list is least specific, so list two wins",
+		},
+		{
+			name:        "non-empty vs empty",
+			listOne:     []string{"example.com"},
+			listTwo:     []string{},
+			want:        -1,
+			description: "non-empty list beats catch-all (empty) list",
+		},
+		{
+			name:        "same single hostname",
+			listOne:     []string{"example.com"},
+			listTwo:     []string{"example.com"},
+			want:        0,
+			description: "identical hostnames tie so precedence falls through to path",
+		},
+		{
+			// Regression: a longer hostname list must NOT be treated as more
+			// specific. Both lists share the equally-specific hostname
+			// example.com, so this must tie (0) and let path break the tie.
+			name:        "more hostnames does not beat fewer hostnames when most-specific ties",
+			listOne:     []string{"example.com", "example.net"},
+			listTwo:     []string{"example.com"},
+			want:        0,
+			description: "hostname-list length is not a specificity signal; equal most-specific hostname ties",
+		},
+		{
+			name:        "exact beats wildcard regardless of list length",
+			listOne:     []string{"api.example.com"},
+			listTwo:     []string{"*.example.com", "*.svc.example.com"},
+			want:        -1,
+			description: "most-specific representative: api.example.com (non-wildcard) beats any wildcard",
+		},
+		{
+			name:        "more dots in most-specific hostname wins",
+			listOne:     []string{"example.com", "a.example.com"},
+			listTwo:     []string{"example.com", "example.net"},
+			want:        -1,
+			description: "list one's most specific (a.example.com, 2 dots) beats list two's (1 dot)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getHostnameListPrecedenceOrder(tt.listOne, tt.listTwo)
+			assert.Equal(t, tt.want, got, tt.description)
+		})
+	}
+}
+
+// Test_getHostnameListPrecedenceOrder_Transitive guards against a non-transitive
+// comparator (which makes sort.Slice produce undefined ordering). For the triple
+// X=[example.com], Y=[example.com, a.example.com], Z=[example.com, example.net],
+// the earlier length-based tiebreak made X "equal" to both Y and Z while Y and Z
+// were unequal, violating the strict weak ordering sort.Slice requires.
+func Test_getHostnameListPrecedenceOrder_Transitive(t *testing.T) {
+	x := []string{"example.com"}
+	y := []string{"example.com", "a.example.com"}
+	z := []string{"example.com", "example.net"}
+
+	lists := map[string][]string{"x": x, "y": y, "z": z}
+	// sign normalizes a comparison result to -1/0/1.
+	sign := func(v int) int {
+		switch {
+		case v < 0:
+			return -1
+		case v > 0:
+			return 1
+		default:
+			return 0
+		}
+	}
+
+	// Verify antisymmetry: cmp(a,b) == -cmp(b,a) for every pair.
+	names := []string{"x", "y", "z"}
+	for _, a := range names {
+		for _, b := range names {
+			ab := sign(getHostnameListPrecedenceOrder(lists[a], lists[b]))
+			ba := sign(getHostnameListPrecedenceOrder(lists[b], lists[a]))
+			assert.Equal(t, ab, -ba, "comparator must be antisymmetric for %s vs %s", a, b)
+		}
+	}
+
+	// Verify transitivity of the induced "equal" relation is not violated: if
+	// X==Y and X==Z then Y==Z. Under the correct comparator X is strictly less
+	// specific than Y (a.example.com adds specificity), so this holds vacuously,
+	// but we assert the concrete expected relations to lock in behavior.
+	assert.Equal(t, 0, getHostnameListPrecedenceOrder(x, z), "x and z tie on most-specific hostname")
+	assert.Equal(t, 1, sign(getHostnameListPrecedenceOrder(x, y)), "y is more specific than x (a.example.com)")
+	assert.Equal(t, 1, sign(getHostnameListPrecedenceOrder(z, y)), "y is more specific than z (a.example.com > example.net)")
 }
 
 func Test_compareCrossKindRulePrecedence(t *testing.T) {
