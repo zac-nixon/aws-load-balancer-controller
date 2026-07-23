@@ -364,8 +364,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     math.MaxInt,
 						RouteCreateTimestamp: httpOneRuleNoMatch.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{},
+					PrecedenceFactor: &RulePrecedenceFactor{},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{},
 				},
 			},
 		},
@@ -385,7 +385,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpOneRuleOneMatch.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+					PrecedenceFactor: &RulePrecedenceFactor{
 						PathType:   3,
 						PathLength: 4,
 					},
@@ -414,7 +414,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpOneRuleMultipleMatches.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+					PrecedenceFactor: &RulePrecedenceFactor{
 						PathType:   3,
 						PathLength: 4,
 					},
@@ -435,7 +435,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     1,
 						RouteCreateTimestamp: httpOneRuleMultipleMatches.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+					PrecedenceFactor: &RulePrecedenceFactor{
 						PathType:   2,
 						PathLength: 12,
 					},
@@ -477,8 +477,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     math.MaxInt,
 						RouteCreateTimestamp: grpcOneRuleNoMatch.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{},
-					GRPCMatch:                        &gwv1.GRPCRouteMatch{},
+					PrecedenceFactor: &RulePrecedenceFactor{},
+					GRPCMatch:        &gwv1.GRPCRouteMatch{},
 				},
 			},
 		},
@@ -498,10 +498,10 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcOneRuleOneMatch.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-						PathType:      3,
-						ServiceLength: 16,
-						MethodLength:  4,
+					PrecedenceFactor: &RulePrecedenceFactor{
+						PathType:        3,
+						PathLength:      16,
+						SecondaryLength: 4,
 					},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{
@@ -529,10 +529,10 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     1,
 						RouteCreateTimestamp: grpcOneRuleMultipleMatches.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-						PathType:      3,
-						ServiceLength: 17,
-						MethodLength:  11,
+					PrecedenceFactor: &RulePrecedenceFactor{
+						PathType:        3,
+						PathLength:      17,
+						SecondaryLength: 11,
 					},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{
@@ -552,10 +552,10 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcOneRuleMultipleMatches.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-						PathType:      3,
-						ServiceLength: 16,
-						MethodLength:  4,
+					PrecedenceFactor: &RulePrecedenceFactor{
+						PathType:        3,
+						PathLength:      16,
+						SecondaryLength: 4,
 					},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{
@@ -585,8 +585,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpUsers.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 3, PathLength: 10},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/api/users")}},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 10},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/api/users")}},
 				},
 				{
 					CommonRulePrecedence: CommonRulePrecedence{
@@ -598,8 +598,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpAPI.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 2, PathLength: 4},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/api")}},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 2, PathLength: 4},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/api")}},
 				},
 				{
 					CommonRulePrecedence: CommonRulePrecedence{
@@ -611,8 +611,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpCatchAll.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 2, PathLength: 1},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/")}},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 2, PathLength: 1},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/")}},
 				},
 			},
 		},
@@ -634,7 +634,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcLongSvc.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 3, ServiceLength: 29, MethodLength: 7},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 29, SecondaryLength: 7},
 					GRPCMatch: &gwv1.GRPCRouteMatch{Method: &gwv1.GRPCMethodMatch{
 						Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact")), Service: awssdk.String("com.company.longpkg.MyService"), Method: awssdk.String("Execute"),
 					}},
@@ -649,7 +649,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcShortSvc.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 3, ServiceLength: 13, MethodLength: 6},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 13, SecondaryLength: 6},
 					GRPCMatch: &gwv1.GRPCRouteMatch{Method: &gwv1.GRPCMethodMatch{
 						Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact")), Service: awssdk.String("pkg.MyService"), Method: awssdk.String("DoWork"),
 					}},
@@ -664,8 +664,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     math.MaxInt,
 						RouteCreateTimestamp: grpcCatchAll.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{},
-					GRPCMatch:                        &gwv1.GRPCRouteMatch{},
+					PrecedenceFactor: &RulePrecedenceFactor{},
+					GRPCMatch:        &gwv1.GRPCRouteMatch{},
 				},
 			},
 		},
@@ -687,7 +687,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcEcho.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 3, ServiceLength: 14, MethodLength: 4},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 14, SecondaryLength: 4},
 					GRPCMatch: &gwv1.GRPCRouteMatch{Method: &gwv1.GRPCMethodMatch{
 						Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact")), Service: awssdk.String("my.EchoService"), Method: awssdk.String("Echo"),
 					}},
@@ -702,8 +702,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpStatus.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 3, PathLength: 7},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/status")}},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 7},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/status")}},
 				},
 				{
 					CommonRulePrecedence: CommonRulePrecedence{
@@ -715,8 +715,8 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpRoot.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 2, PathLength: 1},
-					HTTPMatch:                        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/")}},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 2, PathLength: 1},
+					HTTPMatch:        &gwv1.HTTPRouteMatch{Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/")}},
 				},
 			},
 		},
@@ -738,7 +738,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpWithMethod.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 3, PathLength: 10, HasMethod: true},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 10, HasMethod: true},
 					HTTPMatch: &gwv1.HTTPRouteMatch{
 						Path:   &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/api/items")},
 						Method: (*gwv1.HTTPMethod)(awssdk.String("POST")),
@@ -754,7 +754,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpNoMethod.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 3, PathLength: 10, HeaderCount: 3},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 10, HeaderCount: 3},
 					HTTPMatch: &gwv1.HTTPRouteMatch{
 						Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/api/items")},
 						Headers: []gwv1.HTTPHeaderMatch{
@@ -774,7 +774,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcWithHeaders.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 3, ServiceLength: 9, MethodLength: 0, HeaderCount: 2},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 9, SecondaryLength: 0, HeaderCount: 2},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact")), Service: awssdk.String("api.Items"), Method: awssdk.String("")},
 						Headers: []gwv1.GRPCHeaderMatch{
@@ -810,7 +810,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcExactLong.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 3, ServiceLength: 28, MethodLength: 11},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 28, SecondaryLength: 11},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact")), Service: awssdk.String("com.company.api.OrderService"), Method: awssdk.String("CreateOrder")},
 					},
@@ -825,7 +825,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpExactWithQueryParams.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 3, PathLength: 7, QueryParamCount: 2},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 3, PathLength: 7, QueryParamCount: 2},
 					HTTPMatch: &gwv1.HTTPRouteMatch{
 						Path:        &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("Exact")), Value: awssdk.String("/search")},
 						QueryParams: []gwv1.HTTPQueryParamMatch{{Name: "q", Value: "test"}, {Name: "page", Value: "1"}},
@@ -841,7 +841,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: httpPrefixAPI.GetRouteCreateTimestamp(),
 					},
-					HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{PathType: 2, PathLength: 14},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 2, PathLength: 14},
 					HTTPMatch: &gwv1.HTTPRouteMatch{
 						Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String("PathPrefix")), Value: awssdk.String("/api/v2/orders")},
 					},
@@ -856,7 +856,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 						MatchIndexInRule:     0,
 						RouteCreateTimestamp: grpcRegexRoute.GetRouteCreateTimestamp(),
 					},
-					GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{PathType: 1, ServiceLength: 9, MethodLength: 5},
+					PrecedenceFactor: &RulePrecedenceFactor{PathType: 1, PathLength: 9, SecondaryLength: 5},
 					GRPCMatch: &gwv1.GRPCRouteMatch{
 						Method: &gwv1.GRPCMethodMatch{Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("RegularExpression")), Service: awssdk.String("com.api.*"), Method: awssdk.String("Get.*")},
 					},
@@ -873,7 +873,7 @@ func Test_SortAllRulesByPrecedence(t *testing.T) {
 	}
 }
 
-func Test_compareHttpRulePrecedence(t *testing.T) {
+func Test_compareRulePrecedence_HTTP(t *testing.T) {
 	tests := []struct {
 		name    string
 		ruleOne RulePrecedence
@@ -902,7 +902,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType: 3,
 				},
 			},
@@ -910,7 +910,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType: 1,
 				},
 			},
@@ -923,7 +923,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   1,
 					PathLength: 10,
 				},
@@ -932,7 +932,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   1,
 					PathLength: 5,
 				},
@@ -946,7 +946,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   1,
 					PathLength: 5,
 					HasMethod:  true,
@@ -956,7 +956,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   1,
 					PathLength: 5,
 					HasMethod:  false,
@@ -972,7 +972,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 					Hostnames:            defaultHostname,
 					RouteCreateTimestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 1,
 				},
@@ -982,7 +982,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 					Hostnames:            []string{},
 					RouteCreateTimestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 1,
 				},
@@ -997,7 +997,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 					Hostnames:            []string{},
 					RouteCreateTimestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 1,
 				},
@@ -1007,7 +1007,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 					Hostnames:            defaultHostname,
 					RouteCreateTimestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 1,
 				},
@@ -1021,7 +1021,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 1,
 				},
@@ -1030,7 +1030,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2,
 					PathLength: 20,
 				},
@@ -1048,7 +1048,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"example.com"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2, // prefix "/v2"
 					PathLength: 3,
 				},
@@ -1057,7 +1057,7 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"example.com", "example.net"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2, // prefix "/"
 					PathLength: 1,
 				},
@@ -1069,13 +1069,13 @@ func Test_compareHttpRulePrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := compareHttpRulePrecedence(tt.ruleOne, tt.ruleTwo)
+			got := compareRulePrecedenceUnified(tt.ruleOne, tt.ruleTwo)
 			assert.Equal(t, tt.want, got, tt.reason)
 		})
 	}
 }
 
-func Test_compareGrpcRulePrecedence(t *testing.T) {
+func Test_compareRulePrecedence_GRPC(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	earlier := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -1107,18 +1107,18 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:   1,
+					PathLength: 10,
 				},
 			},
 			ruleTwo: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 5,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:   1,
+					PathLength: 5,
 				},
 			},
 			want:   true,
@@ -1130,7 +1130,7 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    1,
 					HeaderCount: 10,
 				},
@@ -1139,7 +1139,7 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    1,
 					HeaderCount: 5,
 				},
@@ -1153,18 +1153,18 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:     1,
-					MethodLength: 10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					SecondaryLength: 10,
 				},
 			},
 			ruleTwo: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:     1,
-					MethodLength: 5,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					SecondaryLength: 5,
 				},
 			},
 			want:   true,
@@ -1176,18 +1176,18 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 5,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:   1,
+					PathLength: 5,
 				},
 			},
 			ruleTwo: RulePrecedence{
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: defaultHostname,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:     1,
-					MethodLength: 10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					SecondaryLength: 10,
 				},
 			},
 			want:   true,
@@ -1200,11 +1200,11 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 					Hostnames:            defaultHostname,
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 10,
-					MethodLength:  10,
-					HeaderCount:   10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					PathLength:      10,
+					SecondaryLength: 10,
+					HeaderCount:     10,
 				},
 			},
 			ruleTwo: RulePrecedence{
@@ -1212,11 +1212,11 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 					Hostnames:            defaultHostname,
 					RouteCreateTimestamp: now,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 10,
-					MethodLength:  10,
-					HeaderCount:   10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					PathLength:      10,
+					SecondaryLength: 10,
+					HeaderCount:     10,
 				},
 			},
 			want:   true,
@@ -1229,11 +1229,11 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 					Hostnames:        defaultHostname,
 					RuleIndexInRoute: 1,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 10,
-					MethodLength:  10,
-					HeaderCount:   10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					PathLength:      10,
+					SecondaryLength: 10,
+					HeaderCount:     10,
 				},
 			},
 			ruleTwo: RulePrecedence{
@@ -1241,11 +1241,11 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 					Hostnames:        defaultHostname,
 					RuleIndexInRoute: 3,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1,
-					ServiceLength: 10,
-					MethodLength:  10,
-					HeaderCount:   10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1,
+					PathLength:      10,
+					SecondaryLength: 10,
+					HeaderCount:     10,
 				},
 			},
 			want:   true,
@@ -1255,7 +1255,7 @@ func Test_compareGrpcRulePrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := compareGrpcRulePrecedence(tt.ruleOne, tt.ruleTwo)
+			got := compareRulePrecedenceUnified(tt.ruleOne, tt.ruleTwo)
 			assert.Equal(t, tt.want, got, tt.reason)
 		})
 	}
@@ -1486,7 +1486,7 @@ func Test_getHostnameListPrecedenceOrder_Transitive(t *testing.T) {
 	assert.Equal(t, 1, sign(getHostnameListPrecedenceOrder(z, y)), "y is more specific than z (a.example.com > example.net)")
 }
 
-func Test_compareCrossKindRulePrecedence(t *testing.T) {
+func Test_compareRulePrecedence_CrossKind(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	earlier := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -1504,7 +1504,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: now, // attacker route is newer
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2, // prefix
 					PathLength: 1, // "/" which becomes "/*"
 				},
@@ -1514,10 +1514,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier, // victim route is older
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,  // exact
-					ServiceLength: 20, // "victim.pkg.EchoService"
-					MethodLength:  4,  // "Echo"
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,  // exact
+					PathLength:      20, // "victim.pkg.EchoService"
+					SecondaryLength: 4,  // "Echo"
 				},
 			},
 			want:   false,
@@ -1530,10 +1530,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,  // exact
-					ServiceLength: 20, // "victim.pkg.EchoService"
-					MethodLength:  4,  // "Echo"
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,  // exact
+					PathLength:      20, // "victim.pkg.EchoService"
+					SecondaryLength: 4,  // "Echo"
 				},
 			},
 			ruleTwo: RulePrecedence{
@@ -1541,7 +1541,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: now,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2, // prefix
 					PathLength: 1, // "/"
 				},
@@ -1555,7 +1555,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"api.example.com"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   3,  // exact
 					PathLength: 20, // "/specific/endpoint"
 				},
@@ -1564,10 +1564,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"api.example.com"},
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      1, // regex
-					ServiceLength: 5,
-					MethodLength:  3,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        1, // regex
+					PathLength:      5,
+					SecondaryLength: 3,
 				},
 			},
 			want:   true,
@@ -1580,7 +1580,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   3, // exact
 					PathLength: 10,
 				},
@@ -1590,10 +1590,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: now,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3, // exact
-					ServiceLength: 5,
-					MethodLength:  3, // effective length = 5+3+2 = 10
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3, // exact
+					PathLength:      5,
+					SecondaryLength: 3, // effective length = 5+3+2 = 10
 				},
 			},
 			want:   true,
@@ -1606,7 +1606,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: now,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   3, // exact
 					PathLength: 10,
 				},
@@ -1616,10 +1616,9 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3, // exact
-					ServiceLength: 5,
-					MethodLength:  3, // effective length = 5+3+2 = 10
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:   3,  // exact
+					PathLength: 10, // GRPC service length 10, no method — same specificity as HTTP path length 10
 				},
 			},
 			want:   false,
@@ -1631,7 +1630,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"shared.example.com"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   3, // exact
 					PathLength: 5,
 				},
@@ -1640,10 +1639,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"shared.example.com"},
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,  // exact
-					ServiceLength: 15, // effective = 15+5+2 = 22
-					MethodLength:  5,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,  // exact
+					PathLength:      15, // effective = 15+5+2 = 22
+					SecondaryLength: 5,
 				},
 			},
 			want:   false,
@@ -1655,7 +1654,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"shared.example.com"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3, // exact
 					PathLength:  10,
 					HeaderCount: 2,
@@ -1665,11 +1664,11 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"shared.example.com"},
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3, // exact
-					ServiceLength: 5,
-					MethodLength:  3, // effective = 10
-					HeaderCount:   0,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3, // exact
+					PathLength:      5,
+					SecondaryLength: 3, // effective = 10
+					HeaderCount:     0,
 				},
 			},
 			want:   true,
@@ -1681,7 +1680,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"specific.example.com"},
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:   2, // prefix
 					PathLength: 1,
 				},
@@ -1690,10 +1689,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 				CommonRulePrecedence: CommonRulePrecedence{
 					Hostnames: []string{"*.example.com"},
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3, // exact
-					ServiceLength: 20,
-					MethodLength:  10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3, // exact
+					PathLength:      20,
+					SecondaryLength: 10,
 				},
 			},
 			want:   true,
@@ -1706,7 +1705,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3,
 					PathLength:  10,
 					HasMethod:   true,
@@ -1718,11 +1717,11 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   5,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,
+					PathLength:      4,
+					SecondaryLength: 4, // effective=10
+					HeaderCount:     5,
 				},
 			},
 			want:   true,
@@ -1735,11 +1734,11 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   10,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,
+					PathLength:      4,
+					SecondaryLength: 4, // effective=10
+					HeaderCount:     10,
 				},
 			},
 			ruleTwo: RulePrecedence{
@@ -1747,7 +1746,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3,
 					PathLength:  10,
 					HasMethod:   true,
@@ -1764,7 +1763,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3,
 					PathLength:  10,
 					HasMethod:   false,
@@ -1776,11 +1775,11 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   1,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,
+					PathLength:      4,
+					SecondaryLength: 4, // effective=10
+					HeaderCount:     1,
 				},
 			},
 			want:   true,
@@ -1793,11 +1792,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   4,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:    3,
+					PathLength:  10, // GRPC service length 10, no method — same specificity as HTTP path length 10
+					HeaderCount: 4,
 				},
 			},
 			ruleTwo: RulePrecedence{
@@ -1805,7 +1803,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3,
 					PathLength:  10,
 					HasMethod:   false,
@@ -1822,7 +1820,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:        3,
 					PathLength:      10,
 					HasMethod:       false,
@@ -1835,11 +1833,11 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					Hostnames:            []string{"shared.example.com"},
 					RouteCreateTimestamp: earlier,
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   2,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:        3,
+					PathLength:      4,
+					SecondaryLength: 4, // effective=10
+					HeaderCount:     2,
 				},
 			},
 			want:   true,
@@ -1853,7 +1851,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					RouteCreateTimestamp: earlier,
 					RouteNamespacedName:  "ns/http-rule",
 				},
-				HttpSpecificRulePrecedenceFactor: &HttpSpecificRulePrecedenceFactor{
+				PrecedenceFactor: &RulePrecedenceFactor{
 					PathType:    3,
 					PathLength:  10,
 					HasMethod:   false,
@@ -1866,11 +1864,10 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 					RouteCreateTimestamp: earlier,
 					RouteNamespacedName:  "ns/grpc-rule",
 				},
-				GrpcSpecificRulePrecedenceFactor: &GrpcSpecificRulePrecedenceFactor{
-					PathType:      3,
-					ServiceLength: 4,
-					MethodLength:  4, // effective=10
-					HeaderCount:   2,
+				PrecedenceFactor: &RulePrecedenceFactor{
+					PathType:    3,
+					PathLength:  10, // GRPC service length 10, no method — same specificity as HTTP path length 10
+					HeaderCount: 2,
 				},
 			},
 			want:   false,
@@ -1880,7 +1877,7 @@ func Test_compareCrossKindRulePrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := compareCrossKindRulePrecedence(tt.ruleOne, tt.ruleTwo)
+			got := compareRulePrecedenceUnified(tt.ruleOne, tt.ruleTwo)
 			assert.Equal(t, tt.want, got, tt.reason)
 		})
 	}
