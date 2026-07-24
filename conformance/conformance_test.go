@@ -13,7 +13,7 @@ func TestConformance(t *testing.T) {
 
 	// Configure skip tests and supported features
 	options.SkipTests = []string{
-		"GatewayNameMaximumLength",                  //
+		"GatewayNameMaximumLength",                  // This test is in v1.7, we will need to address it for v1.7 conformance.
 		"GatewayInvalidTLSConfiguration",            // We don't use secrets for TLS
 		"GatewaySecretInvalidReferenceGrant",        // We don't use secrets
 		"GatewaySecretMissingReferenceGrant",        // We don't use secrets

@@ -6,21 +6,39 @@ package routeutils
 // sort.Slice produce an undefined, input-order-dependent result, plus semantic
 // ordering regressions (e.g. a catch-all outranking a more specific path).
 //
-// Three complementary gates:
+// Design note — why static scenarios instead of randomly generated data:
 //
-//  1. SWO property tests (axiom-based):
-//       - getHostnameListPrecedenceOrder (the exact function whose non-transitive
-//         behavior caused the original production bug), as a three-way comparator.
-//       - compareRulePrecedenceUnified over HTTP-only, GRPC-only, and MIXED inputs,
-//         verifying the single comparator is a strict weak ordering.
+//	Earlier revisions of this file generated the corpus with math/rand and a set
+//	of seeds. That has two problems: (a) a failure reproduces only if you know the
+//	seed and the exact generator version, and (b) the generator might never emit
+//	the specific adversarial shapes that actually break the comparator, so a green
+//	run tells you little about coverage. Here the corpus is HAND-AUTHORED and
+//	STATIC: every scenario is visible in the source, including the exact
+//	cross-kind triple that cycled in production. Determinism/stability is then
+//	proven not by re-generating random data but by exercising the SAME static
+//	inputs under MANY deterministic permutations (identity, reverse, every
+//	rotation, and ~1000 fixed-seed shuffles): a valid strict weak ordering must
+//	yield byte-identical output for every permutation, so if the ordering ever
+//	changes the test fails. The seed used to permute the VISITING ORDER is fixed,
+//	so any failure reproduces exactly on the next run.
 //
-//  2. Shuffle-determinism + stable/unstable agreement over the full end-to-end
-//     SortAllRulesByPrecedence on realistic MIXED (HTTP+GRPC) inputs. This is the
-//     black-box guard that reproduces the production symptom ("ALB order depends
-//     on input order") and covers the cross-kind comparator without relying on
-//     fragile synthetic domain collisions.
+// Four complementary gates:
 //
-//  3. Golden ordering fixtures for SortAllRulesByPrecedence, including the exact
+//  1. SWO property tests (axiom-based), exhaustive over a static corpus:
+//       - getHostnamePrecedenceOrder (the hostname comparator, incl. ""=catch-all),
+//         the three-way comparator whose non-transitive/empty handling matters most.
+//       - compareRulePrecedenceUnified over HTTP-only, GRPC-only, and MIXED static
+//         corpora, verifying the single comparator is a strict weak ordering.
+//
+//  2. Permutation-invariance of sort output over the static corpus: sorting the
+//     corpus under identity/reverse/rotations/~1000 shuffles must always produce
+//     the same key sequence, and sort.Slice must agree with sort.SliceStable.
+//
+//  3. Permutation-invariance of the full end-to-end SortAllRulesByPrecedence on
+//     realistic MIXED (HTTP+GRPC) static route sets. This is the black-box guard
+//     that reproduces the production symptom ("ALB order depends on input order").
+//
+//  4. Golden ordering fixtures for SortAllRulesByPrecedence, including the exact
 //     cross-route catch-all-vs-specific-path scenario from the gateway-api
 //     conformance test httproute-matching-across-routes.
 
@@ -52,96 +70,22 @@ func swoSign(v int) int {
 	}
 }
 
-var swoSeeds = []int64{1, 2, 3, 5, 8, 13, 21, 34}
+// permStabilityShuffles is how many fixed-seed shuffles each permutation-invariance
+// test applies to its static input. Combined with the identity, full-reverse and
+// every-rotation permutations, this is the "run it many times, the ordering must
+// never change" guarantee — with static data and a fixed seed, so it is both
+// high-volume and fully reproducible.
+const permStabilityShuffles = 1000
 
-var swoHostnamePool = []string{
-	"example.com",
-	"example.net",
-	"a.example.com",
-	"api.example.com",
-	"foo.bar.example.com",
-	"*.example.com",
-	"*.b.example.com",
-}
-
-// randHostnameList returns a random hostname list of size 0..3 (size 0 == the
-// catch-all case, which is exactly where the production bug lived).
-func randHostnameList(rng *rand.Rand) []string {
-	n := rng.Intn(4) // 0..3
-	if n == 0 {
-		return nil
-	}
-	perm := rng.Perm(len(swoHostnamePool))
-	out := make([]string, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, swoHostnamePool[perm[i]])
-	}
-	return out
-}
-
-type ruleKind int
-
-const (
-	kindHTTP ruleKind = iota
-	kindGRPC
-	kindMixed
-)
+// permStabilitySeed seeds the shuffler used by the permutation-invariance tests.
+// It only permutes the VISITING ORDER of static inputs; the scenario data itself
+// is hand-authored and never randomized. Fixing the seed makes every "shuffle"
+// identical across runs, so a failure always reproduces.
+const permStabilitySeed int64 = 0x5303173 // "SWO" spelled in leetspeak; any fixed value works
 
 var swoTimes = []time.Time{
 	time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 	time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-}
-
-var swoNames = []string{"ns-a/route-1", "ns-a/route-2", "ns-b/route-1"}
-
-// genRandomRule builds a random, well-formed RulePrecedence. Exactly one of the
-// kind-specific factors is set, matching how SortAllRulesByPrecedence constructs
-// values. Domains are intentionally small so ties (and thus equivalence classes)
-// actually occur, which is what makes the equivalence-transitivity axiom
-// meaningful. matchIdx is threaded through as MatchIndexInRule to give each
-// generated element the unique (route, rule, match) identity that production
-// always has.
-func genRandomRule(rng *rand.Rand, kind ruleKind, matchIdx int) RulePrecedence {
-	common := CommonRulePrecedence{
-		Hostnames:            randHostnameList(rng),
-		RouteNamespacedName:  swoNames[rng.Intn(len(swoNames))],
-		RouteCreateTimestamp: swoTimes[rng.Intn(len(swoTimes))],
-		RuleIndexInRoute:     rng.Intn(2),
-		MatchIndexInRule:     matchIdx,
-	}
-
-	isHTTP := kind == kindHTTP || (kind == kindMixed && rng.Intn(2) == 0)
-	if isHTTP {
-		return RulePrecedence{
-			PrecedenceFactor: &RulePrecedenceFactor{
-				PathType:        []int{0, 1, 2, 3}[rng.Intn(4)],
-				PathLength:      []int{0, 1, 3, 5, 7}[rng.Intn(5)],
-				HasMethod:       rng.Intn(2) == 0,
-				HeaderCount:     rng.Intn(3),
-				QueryParamCount: rng.Intn(2),
-			},
-			CommonRulePrecedence: common,
-		}
-	}
-	// GRPC-shaped factor: service length is the primary length, method length the
-	// secondary; HasMethod stays false and QueryParamCount stays 0.
-	return RulePrecedence{
-		PrecedenceFactor: &RulePrecedenceFactor{
-			PathType:        []int{0, 1, 3}[rng.Intn(3)],
-			PathLength:      []int{0, 3, 5}[rng.Intn(3)],
-			SecondaryLength: []int{0, 3, 7}[rng.Intn(3)],
-			HeaderCount:     rng.Intn(3),
-		},
-		CommonRulePrecedence: common,
-	}
-}
-
-func genRandomRules(rng *rand.Rand, kind ruleKind, n int) []RulePrecedence {
-	out := make([]RulePrecedence, n)
-	for i := 0; i < n; i++ {
-		out[i] = genRandomRule(rng, kind, i)
-	}
-	return out
 }
 
 // assertBoolComparatorIsSWO verifies the four axioms a `less` comparator must
@@ -152,7 +96,10 @@ func genRandomRules(rng *rand.Rand, kind ruleKind, n int) []RulePrecedence {
 //   - transitivity of ~ (equal): eq(a,b) && eq(b,c) => eq(a,c), where
 //     eq(a,b) := !less(a,b) && !less(b,a)
 //
-// A violation is reported with the concrete indices so failures are debuggable.
+// It is run EXHAUSTIVELY over every pair and triple of a static corpus, which is
+// a strictly stronger guarantee than sampling random inputs: for the curated
+// scenarios there is no pair or triple that can violate the contract. A violation
+// is reported with the concrete indices/labels so failures are debuggable.
 func assertBoolComparatorIsSWO(t *testing.T, items []RulePrecedence, less func(a, b RulePrecedence) bool, label func(i int) string) {
 	t.Helper()
 	n := len(items)
@@ -207,157 +154,588 @@ func assertBoolComparatorIsSWO(t *testing.T, items []RulePrecedence, less func(a
 	}
 }
 
-// ---------------------------------------------------------------------------
-// 1. SWO property tests for the sub-comparators
-// ---------------------------------------------------------------------------
-
-// Test_getHostnameListPrecedenceOrder_SWO_Property randomly generates hostname
-// lists (including empty catch-all lists) and verifies the three-way comparator
-// is a strict weak ordering. This is the direct regression guard for the
-// production bug, where an empty list compared "equal" to every list, making the
-// induced equivalence relation non-transitive.
-func Test_getHostnameListPrecedenceOrder_SWO_Property(t *testing.T) {
-	cmp := getHostnameListPrecedenceOrder
-
-	for _, seed := range swoSeeds {
-		rng := rand.New(rand.NewSource(seed))
-		const n = 80
-		lists := make([][]string, n)
-		for i := range lists {
-			lists[i] = randHostnameList(rng)
-		}
-		label := func(i int) string { return fmt.Sprintf("%v", lists[i]) }
-
-		// Reflexivity of equality and antisymmetry.
-		for i := 0; i < n; i++ {
-			if cmp(lists[i], lists[i]) != 0 {
-				t.Fatalf("seed %d: cmp(x,x) != 0 for %s", seed, label(i))
-			}
-			for j := 0; j < n; j++ {
-				if swoSign(cmp(lists[i], lists[j])) != -swoSign(cmp(lists[j], lists[i])) {
-					t.Fatalf("seed %d: antisymmetry violated\n a=%s\n b=%s", seed, label(i), label(j))
-				}
-			}
-		}
-		// Transitivity of strict order and of equivalence.
-		for i := 0; i < n; i++ {
-			for j := 0; j < n; j++ {
-				sij := swoSign(cmp(lists[i], lists[j]))
-				for k := 0; k < n; k++ {
-					sjk := swoSign(cmp(lists[j], lists[k]))
-					sik := swoSign(cmp(lists[i], lists[k]))
-					if sij < 0 && sjk < 0 && !(sik < 0) {
-						t.Fatalf("seed %d: strict transitivity violated\n a=%s\n b=%s\n c=%s", seed, label(i), label(j), label(k))
-					}
-					if sij == 0 && sjk == 0 && sik != 0 {
-						t.Fatalf("seed %d: equivalence transitivity violated\n a=%s\n b=%s\n c=%s", seed, label(i), label(j), label(k))
-					}
-				}
-			}
-		}
-	}
-}
-
-// Test_compareRulePrecedenceUnified_SWO_Property_HTTPOnly verifies the unified
-// comparator is a strict weak ordering across randomized HTTP-shaped rules. The
-// equivalence-transitivity axiom exercises the hostname key: a regression that
-// makes hostname comparison non-transitive (the original production bug) breaks
-// this test.
-func Test_compareRulePrecedenceUnified_SWO_Property_HTTPOnly(t *testing.T) {
-	for _, seed := range swoSeeds {
-		rng := rand.New(rand.NewSource(seed))
-		rules := genRandomRules(rng, kindHTTP, 60)
-		assertBoolComparatorIsSWO(t, rules, compareRulePrecedenceUnified, func(i int) string {
-			return fmt.Sprintf("seed %d idx %d %s", seed, i, describeRule(rules[i]))
-		})
-	}
-}
-
-// Test_compareRulePrecedenceUnified_SWO_Property_GRPCOnly verifies the unified
-// comparator is a strict weak ordering across randomized GRPC-shaped rules.
-func Test_compareRulePrecedenceUnified_SWO_Property_GRPCOnly(t *testing.T) {
-	for _, seed := range swoSeeds {
-		rng := rand.New(rand.NewSource(seed))
-		rules := genRandomRules(rng, kindGRPC, 60)
-		assertBoolComparatorIsSWO(t, rules, compareRulePrecedenceUnified, func(i int) string {
-			return fmt.Sprintf("seed %d idx %d %s", seed, i, describeRule(rules[i]))
-		})
-	}
-}
-
-// Test_compareRulePrecedenceUnified_SWO_Property verifies that the single
-// comparator handed to sort.Slice in SortAllRulesByPrecedence is a strict weak
-// ordering across MIXED HTTP/GRPC inputs — the property sort.Slice requires.
+// assertSortOrderIsPermutationInvariant sorts `items` under many deterministic
+// permutations of the INPUT ORDER and asserts the sorted key sequence never
+// changes. This is the core stability guarantee: for a valid strict weak
+// ordering the output of sort.Slice is a function of the multiset only, so every
+// permutation of the same static input must sort to the same sequence. If the
+// comparator is not an SWO, different input permutations can sort differently and
+// this fails.
 //
-// This is the regression gate for the cross-kind ordering bug. The earlier design
-// used separate same-kind and cross-kind comparators: same-kind GRPC ranked by
-// (serviceLength, methodLength) as separate keys, while the cross-kind path summed
-// them into one effective length. Those disagreed, so a mixed triple could cycle.
-// Minimal counterexample (same most-specific hostname and path type):
+// The permutation set is: the identity, the full reverse, every single rotation,
+// and permStabilityShuffles fixed-seed Fisher-Yates shuffles. Everything is
+// deterministic, so a failure reproduces exactly.
+//
+// Keys are derived from the comparator's tiebreaker fields (see rpKey), so two
+// elements share a key only when they are equivalent under the comparator;
+// reordering equivalent elements therefore does not change the key sequence and
+// cannot cause a spurious failure.
+func assertSortOrderIsPermutationInvariant(t *testing.T, items []RulePrecedence, less func(a, b RulePrecedence) bool, label string) {
+	t.Helper()
+
+	sortCopy := func(in []RulePrecedence) []string {
+		cp := append([]RulePrecedence(nil), in...)
+		sort.Slice(cp, func(i, j int) bool { return less(cp[i], cp[j]) })
+		return rpKeys(cp)
+	}
+
+	baseline := sortCopy(items)
+
+	check := func(perm []RulePrecedence, desc string) {
+		got := sortCopy(perm)
+		if !equalKeys(baseline, got) {
+			t.Fatalf("%s: sort order depends on input order (comparator not a strict weak ordering)\n permutation=%s\n baseline=%v\n got     =%v",
+				label, desc, baseline, got)
+		}
+	}
+
+	n := len(items)
+
+	// Reverse.
+	rev := make([]RulePrecedence, n)
+	for i := range items {
+		rev[n-1-i] = items[i]
+	}
+	check(rev, "reverse")
+
+	// Every rotation.
+	for r := 1; r < n; r++ {
+		rot := make([]RulePrecedence, 0, n)
+		rot = append(rot, items[r:]...)
+		rot = append(rot, items[:r]...)
+		check(rot, fmt.Sprintf("rotate-%d", r))
+	}
+
+	// Fixed-seed shuffles: the data is static, only the visiting order is permuted.
+	rng := rand.New(rand.NewSource(permStabilitySeed))
+	work := append([]RulePrecedence(nil), items...)
+	for s := 0; s < permStabilityShuffles; s++ {
+		rng.Shuffle(len(work), func(i, j int) { work[i], work[j] = work[j], work[i] })
+		check(work, fmt.Sprintf("shuffle-%d", s))
+	}
+
+	// sort.Slice and sort.SliceStable must agree for a valid SWO comparator.
+	a := append([]RulePrecedence(nil), items...)
+	b := append([]RulePrecedence(nil), items...)
+	sort.Slice(a, func(i, j int) bool { return less(a[i], a[j]) })
+	sort.SliceStable(b, func(i, j int) bool { return less(b[i], b[j]) })
+	if !equalKeys(rpKeys(a), rpKeys(b)) {
+		t.Fatalf("%s: sort.Slice and sort.SliceStable disagree (comparator not a strict weak ordering)\n slice =%v\n stable=%v",
+			label, rpKeys(a), rpKeys(b))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 1. Hostname comparator: static corpus + exhaustive SWO axioms
+// ---------------------------------------------------------------------------
+
+// swoHostnameCorpus is a hand-authored set of single hostnames chosen to cover
+// every dimension the hostname comparator orders on, plus the exact shapes that
+// have to be transitive:
+//
+//   - "" (catch-all): the least specific value; must lose to every concrete
+//     hostname, including wildcards. This is where the production bug lived.
+//   - equal-specificity equivalence classes: {example.com, example.net,
+//     example.org} are all 11 chars / 1 dot, so the comparator must rank them
+//     equal (cmp==0). A class of size 3 is what makes equivalence-transitivity a
+//     non-trivial check.
+//   - dot-count vs length ordering: more dots outranks fewer dots; among equal
+//     dot counts, more characters outranks fewer.
+//   - wildcard vs non-wildcard at various depths, so wildcard handling is
+//     transitive against concrete hosts.
+var swoHostnameCorpus = []string{
+	"", // catch-all, least specific
+
+	// 1-dot non-wildcards; the three .com/.net/.org are an equal-specificity class.
+	"example.com",
+	"example.net",
+	"example.org",
+	"example.io", // 10 chars, 1 dot -> distinct (shorter) from the class above
+
+	// 2-dot non-wildcards; a. and b. are an equal-specificity class, api. is longer.
+	"a.example.com",
+	"b.example.com",
+	"api.example.com",
+
+	// 3-dot / 4-dot non-wildcards.
+	"foo.bar.example.com",
+	"a.b.c.example.com",
+
+	// wildcards at various depths.
+	"*.io",
+	"*.example.com",
+	"*.sub.example.com",
+}
+
+// Test_getHostnamePrecedenceOrder_SWO_Static verifies the three-way hostname
+// comparator is a strict weak ordering EXHAUSTIVELY over the static corpus:
+// every pair (antisymmetry, reflexive-equality) and every triple (transitivity
+// of strict order and of equivalence). "" (catch-all) is included so its
+// least-specific handling is covered against concrete and wildcard hosts alike.
+func Test_getHostnamePrecedenceOrder_SWO_Static(t *testing.T) {
+	cmp := getHostnamePrecedenceOrder
+	hosts := swoHostnameCorpus
+	n := len(hosts)
+	label := func(i int) string { return fmt.Sprintf("%q", hosts[i]) }
+
+	// Reflexivity of equality and antisymmetry over all pairs.
+	for i := 0; i < n; i++ {
+		if cmp(hosts[i], hosts[i]) != 0 {
+			t.Fatalf("cmp(x,x) != 0 for %s", label(i))
+		}
+		for j := 0; j < n; j++ {
+			if swoSign(cmp(hosts[i], hosts[j])) != -swoSign(cmp(hosts[j], hosts[i])) {
+				t.Fatalf("antisymmetry violated\n a=%s\n b=%s", label(i), label(j))
+			}
+		}
+	}
+	// Transitivity of strict order and of equivalence over all triples.
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			sij := swoSign(cmp(hosts[i], hosts[j]))
+			for k := 0; k < n; k++ {
+				sjk := swoSign(cmp(hosts[j], hosts[k]))
+				sik := swoSign(cmp(hosts[i], hosts[k]))
+				if sij < 0 && sjk < 0 && !(sik < 0) {
+					t.Fatalf("strict transitivity violated\n a=%s\n b=%s\n c=%s", label(i), label(j), label(k))
+				}
+				if sij == 0 && sjk == 0 && sik != 0 {
+					t.Fatalf("equivalence transitivity violated\n a=%s\n b=%s\n c=%s", label(i), label(j), label(k))
+				}
+			}
+		}
+	}
+}
+
+// Test_getHostnamePrecedenceOrder_Static_KnownOrder pins the semantic ordering
+// of the corpus so a regression that reshuffles hostname precedence (not just
+// one that breaks SWO) is caught. Equal-specificity hosts are grouped; within a
+// group the relative order is "don't care" (cmp==0), so we assert group
+// boundaries rather than a strict total order.
+func Test_getHostnamePrecedenceOrder_Static_KnownOrder(t *testing.T) {
+	// Groups from most specific to least specific. Hosts inside a group compare
+	// equal (cmp==0); hosts in an earlier group outrank hosts in a later group.
+	groups := [][]string{
+		{"a.b.c.example.com"},                         // non-wildcard, 4 dots
+		{"foo.bar.example.com"},                       // non-wildcard, 3 dots
+		{"api.example.com"},                           // non-wildcard, 2 dots, 15 chars
+		{"a.example.com", "b.example.com"},            // non-wildcard, 2 dots, 13 chars (equal class)
+		{"example.com", "example.net", "example.org"}, // non-wildcard, 1 dot, 11 chars (equal class)
+		{"example.io"},                                // non-wildcard, 1 dot, 10 chars
+		{"*.sub.example.com"},                         // wildcard, 3 dots
+		{"*.example.com"},                             // wildcard, 2 dots
+		{"*.io"},                                      // wildcard, 1 dot
+		{""},                                          // catch-all, least specific
+	}
+
+	// Within-group: every pair compares equal.
+	for gi, g := range groups {
+		for _, x := range g {
+			for _, y := range g {
+				if got := getHostnamePrecedenceOrder(x, y); got != 0 {
+					t.Fatalf("group %d: expected %q ~ %q (cmp==0), got %d", gi, x, y, got)
+				}
+			}
+		}
+	}
+	// Across groups: every member of an earlier group outranks every member of a
+	// later group (cmp<0 in earlier-vs-later order, cmp>0 reversed).
+	for gi := 0; gi < len(groups); gi++ {
+		for gj := gi + 1; gj < len(groups); gj++ {
+			for _, x := range groups[gi] {
+				for _, y := range groups[gj] {
+					if got := getHostnamePrecedenceOrder(x, y); got >= 0 {
+						t.Fatalf("expected %q (group %d) to outrank %q (group %d): want <0, got %d", x, gi, y, gj, got)
+					}
+					if got := getHostnamePrecedenceOrder(y, x); got <= 0 {
+						t.Fatalf("expected %q (group %d) to lose to %q (group %d): want >0, got %d", y, gj, x, gi, got)
+					}
+				}
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 2. Unified comparator: static RulePrecedence corpora + SWO axioms + stability
+// ---------------------------------------------------------------------------
+
+// rp builds a RulePrecedence from an explicit common block and specificity
+// factor. Every corpus element below is constructed this way so the full value
+// of each scenario is visible in the source.
+func rp(common CommonRulePrecedence, f RulePrecedenceFactor) RulePrecedence {
+	factor := f // copy so &factor is unique per element
+	return RulePrecedence{
+		CommonRulePrecedence: common,
+		PrecedenceFactor:     &factor,
+	}
+}
+
+// The identity fields (name/rule/match/timestamp) below are chosen so that the
+// unified comparator is a strict TOTAL order over the distinct corpus elements
+// (its tiebreakers fully separate them), which makes the sorted output unique
+// and therefore permutation-invariant. Deliberate exact-duplicate elements
+// (identical in every field) are added where noted to exercise the
+// equivalence-transitivity axiom; duplicates share an rpKey, so reordering them
+// never changes the key sequence.
+
+// buildHTTPCorpus returns HTTP-shaped rules (SecondaryLength always 0) spanning a
+// deterministic product of explicit hostname / path-type / path-length / method /
+// header / query-param value sets. It is generated by enumerating static value
+// lists — not randomized — so coverage is visible and reproducible.
+func buildHTTPCorpus() []RulePrecedence {
+	hosts := []string{"", "example.com", "*.example.com", "api.example.com"}
+	pathTypes := []int{0, 1, 2, 3}
+	// Consecutive values (1,2,3) so a threshold-style ("within 1") non-transitive
+	// comparison on the primary length is caught, not just widely-spaced values.
+	pathLengths := []int{1, 2, 3}
+	out := make([]RulePrecedence, 0, 128)
+	idx := 0
+	for _, host := range hosts {
+		for _, pt := range pathTypes {
+			for _, pl := range pathLengths {
+				for _, hasMethod := range []bool{false, true} {
+					for _, hdr := range []int{0, 2} {
+						for _, qp := range []int{0, 1} {
+							out = append(out, rp(
+								CommonRulePrecedence{
+									Hostname:             host,
+									RouteNamespacedName:  fmt.Sprintf("ns/http-%d", idx),
+									RouteCreateTimestamp: swoTimes[idx%len(swoTimes)],
+									RuleIndexInRoute:     idx % 2,
+									MatchIndexInRule:     idx,
+								},
+								RulePrecedenceFactor{
+									PathType:        pt,
+									PathLength:      pl,
+									HasMethod:       hasMethod,
+									HeaderCount:     hdr,
+									QueryParamCount: qp,
+								},
+							))
+							idx++
+						}
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// buildGRPCCorpus returns GRPC-shaped rules: SecondaryLength (method length) is
+// used, HasMethod is always false and QueryParamCount always 0, matching how
+// getGrpcMatchPrecedenceInfo populates the factor.
+func buildGRPCCorpus() []RulePrecedence {
+	hosts := []string{"", "example.com", "*.example.com", "api.example.com"}
+	pathTypes := []int{0, 1, 3} // GRPC has no prefix(2)
+	// Consecutive values so threshold-style non-transitivity on either the
+	// primary (service) or secondary (method) length is caught.
+	serviceLengths := []int{4, 5, 6}
+	methodLengths := []int{0, 3, 4}
+	out := make([]RulePrecedence, 0, 128)
+	idx := 0
+	for _, host := range hosts {
+		for _, pt := range pathTypes {
+			for _, sl := range serviceLengths {
+				for _, ml := range methodLengths {
+					for _, hdr := range []int{0, 2} {
+						out = append(out, rp(
+							CommonRulePrecedence{
+								Hostname:             host,
+								RouteNamespacedName:  fmt.Sprintf("ns/grpc-%d", idx),
+								RouteCreateTimestamp: swoTimes[idx%len(swoTimes)],
+								RuleIndexInRoute:     idx % 2,
+								MatchIndexInRule:     idx,
+							},
+							RulePrecedenceFactor{
+								PathType:        pt,
+								PathLength:      sl,
+								SecondaryLength: ml,
+								HeaderCount:     hdr,
+							},
+						))
+						idx++
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// swoAdversarialTriple is the exact cross-kind scenario that cycled under the
+// old (pre-unified) comparator. All three share a hostname and path type so the
+// ordering falls entirely to the length keys:
 //
 //	a = GRPC{service=5, method=0}
 //	b = GRPC{service=0, method=7}
 //	c = HTTP{pathLength=7}
-//	old: less(a,b) (service 5>0), less(b,c) (sum 8>7), !less(a,c) (sum 6<7)  => a<b<c but c<a
 //
-// The unified comparator uses one key for every pair (service length as the primary
-// length, method length as the secondary), which is a strict weak ordering by
-// construction, so this test now passes.
-func Test_compareRulePrecedenceUnified_SWO_Property(t *testing.T) {
-	seeds := []int64{1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233}
-	for _, seed := range seeds {
-		rng := rand.New(rand.NewSource(seed))
-		rules := genRandomRules(rng, kindMixed, 120)
-		assertBoolComparatorIsSWO(t, rules, compareRulePrecedenceUnified, func(i int) string {
-			return fmt.Sprintf("seed %d idx %d %s", seed, i, describeRule(rules[i]))
+// The old design compared same-kind GRPC by (service, method) as separate keys
+// but summed them for cross-kind pairs, so: less(a,b) [service 5>0],
+// less(b,c) [sum 7>7... i.e. b outranks c], yet !less(a,c) [sum 5<7] — a<b<c
+// while c<a, a cycle. The unified comparator uses one key set (primary length,
+// then secondary length) for EVERY pair, so no cycle exists. Keeping this triple
+// in the corpus makes the axiom tests a permanent regression guard against any
+// future reintroduction of a summed/inconsistent length key.
+func swoAdversarialTriple() []RulePrecedence {
+	const host = "shared.example.com"
+	const pt = 3 // same path type for all three
+	return []RulePrecedence{
+		rp(CommonRulePrecedence{Hostname: host, RouteNamespacedName: "ns/adv-a", RouteCreateTimestamp: swoTimes[0], MatchIndexInRule: 1001},
+			RulePrecedenceFactor{PathType: pt, PathLength: 5, SecondaryLength: 0}), // GRPC service=5
+		rp(CommonRulePrecedence{Hostname: host, RouteNamespacedName: "ns/adv-b", RouteCreateTimestamp: swoTimes[0], MatchIndexInRule: 1002},
+			RulePrecedenceFactor{PathType: pt, PathLength: 0, SecondaryLength: 7}), // GRPC method=7
+		rp(CommonRulePrecedence{Hostname: host, RouteNamespacedName: "ns/adv-c", RouteCreateTimestamp: swoTimes[0], MatchIndexInRule: 1003},
+			RulePrecedenceFactor{PathType: pt, PathLength: 7}), // HTTP pathLength=7
+	}
+}
+
+// swoEquivalenceGroup returns three elements identical in EVERY compared field,
+// so the unified comparator ranks them equal (eq==true) — a mutual-equivalence
+// class of size 3 that makes the equivalence-transitivity axiom non-trivial.
+// They share an rpKey, so they are interchangeable in any sorted output.
+func swoEquivalenceGroup() []RulePrecedence {
+	mk := func() RulePrecedence {
+		return rp(
+			CommonRulePrecedence{Hostname: "example.com", RouteNamespacedName: "ns/dup", RouteCreateTimestamp: swoTimes[0], RuleIndexInRoute: 0, MatchIndexInRule: 2000},
+			RulePrecedenceFactor{PathType: 3, PathLength: 4, HeaderCount: 1},
+		)
+	}
+	return []RulePrecedence{mk(), mk(), mk()}
+}
+
+// buildMixedCorpus is the full cross-kind corpus: the HTTP and GRPC corpora plus
+// the adversarial triple and the equivalence group. This is the input the
+// unified comparator must order as a strict weak ordering.
+func buildMixedCorpus() []RulePrecedence {
+	out := make([]RulePrecedence, 0, 300)
+	out = append(out, buildHTTPCorpus()...)
+	out = append(out, buildGRPCCorpus()...)
+	out = append(out, swoAdversarialTriple()...)
+	out = append(out, swoEquivalenceGroup()...)
+	return out
+}
+
+func Test_compareRulePrecedenceUnified_SWO_Static_HTTPOnly(t *testing.T) {
+	corpus := buildHTTPCorpus()
+	assertBoolComparatorIsSWO(t, corpus, compareRulePrecedenceUnified, func(i int) string {
+		return fmt.Sprintf("idx %d %s", i, describeRule(corpus[i]))
+	})
+	assertSortOrderIsPermutationInvariant(t, corpus, compareRulePrecedenceUnified, "http-only corpus")
+}
+
+func Test_compareRulePrecedenceUnified_SWO_Static_GRPCOnly(t *testing.T) {
+	corpus := buildGRPCCorpus()
+	assertBoolComparatorIsSWO(t, corpus, compareRulePrecedenceUnified, func(i int) string {
+		return fmt.Sprintf("idx %d %s", i, describeRule(corpus[i]))
+	})
+	assertSortOrderIsPermutationInvariant(t, corpus, compareRulePrecedenceUnified, "grpc-only corpus")
+}
+
+// Test_compareRulePrecedenceUnified_SWO_Static_Mixed is the regression gate for
+// the cross-kind ordering bug. It checks the SWO axioms exhaustively over the
+// mixed corpus (which contains the adversarial triple and the equivalence group)
+// and asserts the sorted output is invariant across ~1000 deterministic input
+// permutations.
+func Test_compareRulePrecedenceUnified_SWO_Static_Mixed(t *testing.T) {
+	corpus := buildMixedCorpus()
+	assertBoolComparatorIsSWO(t, corpus, compareRulePrecedenceUnified, func(i int) string {
+		return fmt.Sprintf("idx %d %s", i, describeRule(corpus[i]))
+	})
+	assertSortOrderIsPermutationInvariant(t, corpus, compareRulePrecedenceUnified, "mixed corpus")
+}
+
+// describeRule renders the salient factors of a RulePrecedence for failure output.
+func describeRule(r RulePrecedence) string {
+	c := r.CommonRulePrecedence
+	f := r.PrecedenceFactor
+	return fmt.Sprintf("{host=%q pt=%d pl=%d sec=%d hm=%t hdr=%d qp=%d name=%s ri=%d mi=%d ts=%s}",
+		c.Hostname, f.PathType, f.PathLength, f.SecondaryLength, f.HasMethod, f.HeaderCount, f.QueryParamCount,
+		c.RouteNamespacedName, c.RuleIndexInRoute, c.MatchIndexInRule, c.RouteCreateTimestamp.Format("2006"))
+}
+
+// rpKey uniquely and stably identifies a flattened rule by the comparator's
+// tiebreaker fields, including the single hostname it was split to. Two elements
+// share a key only when they tie on all of these fields — i.e. only when they
+// are equivalent under the comparator — so a key sequence is a faithful witness
+// of sort order for permutation-invariance checks.
+func rpKey(r RulePrecedence) string {
+	c := r.CommonRulePrecedence
+	return fmt.Sprintf("%s#r%d#m%d#h%q", c.RouteNamespacedName, c.RuleIndexInRoute, c.MatchIndexInRule, c.Hostname)
+}
+
+func rpKeys(rs []RulePrecedence) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = rpKey(r)
+	}
+	return out
+}
+
+func keysOf(rs []RulePrecedence) []string { return rpKeys(rs) }
+
+func equalKeys(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ---------------------------------------------------------------------------
+// 3. End-to-end SortAllRulesByPrecedence: static route sets + stability
+// ---------------------------------------------------------------------------
+
+func cloneRoutes(in []RouteDescriptor) []RouteDescriptor {
+	return append([]RouteDescriptor(nil), in...)
+}
+
+func swoHosts(hosts ...string) []gwv1.Hostname {
+	out := make([]gwv1.Hostname, len(hosts))
+	for i, h := range hosts {
+		out[i] = gwv1.Hostname(h)
+	}
+	return out
+}
+
+func swoHTTPPath(matchType, value string) gwv1.HTTPRouteMatch {
+	return gwv1.HTTPRouteMatch{
+		Path: &gwv1.HTTPPathMatch{Type: (*gwv1.PathMatchType)(awssdk.String(matchType)), Value: awssdk.String(value)},
+	}
+}
+
+func swoGRPCExact(service, method string) gwv1.GRPCRouteMatch {
+	mm := &gwv1.GRPCMethodMatch{Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact"))}
+	if service != "" {
+		mm.Service = awssdk.String(service)
+	}
+	if method != "" {
+		mm.Method = awssdk.String(method)
+	}
+	return gwv1.GRPCRouteMatch{Method: mm}
+}
+
+func swoHTTPRoute(name, ns string, ts time.Time, hosts []gwv1.Hostname, matches ...gwv1.HTTPRouteMatch) *httpRouteDescription {
+	return &httpRouteDescription{
+		route: &gwv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, CreationTimestamp: metav1.Time{Time: ts}},
+			Spec:       gwv1.HTTPRouteSpec{Hostnames: hosts},
+		},
+		rules: []RouteRule{&convertedHTTPRouteRule{rule: &gwv1.HTTPRouteRule{Matches: matches}}},
+	}
+}
+
+func swoGRPCRoute(name, ns string, ts time.Time, hosts []gwv1.Hostname, matches ...gwv1.GRPCRouteMatch) *grpcRouteDescription {
+	return &grpcRouteDescription{
+		route: &gwv1.GRPCRoute{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, CreationTimestamp: metav1.Time{Time: ts}},
+			Spec:       gwv1.GRPCRouteSpec{Hostnames: hosts},
+		},
+		rules: []RouteRule{&convertedGRPCRouteRule{rule: &gwv1.GRPCRouteRule{Matches: matches}}},
+	}
+}
+
+// swoRouteScenarios is a set of hand-authored, realistic route sets. Each is a
+// self-contained input to SortAllRulesByPrecedence chosen to stress a specific
+// ordering interaction end-to-end:
+//   - mixed HTTP + GRPC on a shared hostname (cross-kind ordering)
+//   - multi-hostname routes (per-hostname split, equal-specificity host tiebreak)
+//   - catch-all ("") vs host-specific and wildcard vs exact
+//   - the adversarial cross-kind shapes, materialized as real routes
+func swoRouteScenarios() map[string][]RouteDescriptor {
+	t0 := swoTimes[0]
+	t1 := swoTimes[1]
+
+	return map[string][]RouteDescriptor{
+		"mixed http+grpc shared hostname": {
+			swoHTTPRoute("http-root", "team-a", t1, swoHosts("shared.example.com"), swoHTTPPath("PathPrefix", "/")),
+			swoHTTPRoute("http-status", "team-a", t0, swoHosts("shared.example.com"), swoHTTPPath("Exact", "/status")),
+			swoGRPCRoute("grpc-echo", "team-b", t0, swoHosts("shared.example.com"), swoGRPCExact("my.EchoService", "Echo")),
+			swoGRPCRoute("grpc-catchall", "team-b", t1, swoHosts("shared.example.com")),
+		},
+		"multi-hostname split with wildcard and catch-all": {
+			swoHTTPRoute("http-multi", "ns", t0, swoHosts("*.example.com", "api.example.com", "web.example.com"),
+				swoHTTPPath("Exact", "/health"), swoHTTPPath("PathPrefix", "/")),
+			swoHTTPRoute("http-nohost", "ns", t1, nil, swoHTTPPath("PathPrefix", "/")),
+			swoGRPCRoute("grpc-users", "ns", t0, swoHosts("api.example.com"), swoGRPCExact("com.example.UserService", "GetUser")),
+		},
+		"cross-kind adversarial shapes as routes": {
+			// Same hostname + exact type; distinguished only by length keys — the
+			// end-to-end analogue of swoAdversarialTriple.
+			swoGRPCRoute("grpc-svc5", "ns", t0, swoHosts("shared.example.com"), swoGRPCExact("abcde", "")),        // service len 5
+			swoGRPCRoute("grpc-meth7", "ns", t0, swoHosts("shared.example.com"), swoGRPCExact("", "abcdefg")),     // method len 7
+			swoHTTPRoute("http-path7", "ns", t0, swoHosts("shared.example.com"), swoHTTPPath("Exact", "/abcdef")), // path len 7
+		},
+		"specificity ladder single hostname": {
+			swoHTTPRoute("http-catchall", "ns", t1, swoHosts("app.example.com"), swoHTTPPath("PathPrefix", "/")),
+			swoHTTPRoute("http-api", "ns", t0, swoHosts("app.example.com"), swoHTTPPath("PathPrefix", "/api")),
+			swoHTTPRoute("http-users", "ns", t0, swoHosts("app.example.com"), swoHTTPPath("Exact", "/api/users")),
+		},
+	}
+}
+
+// assertRouteSortPermutationInvariant sorts a static route set under identity,
+// reverse, every rotation, and permStabilityShuffles fixed-seed shuffles of the
+// INPUT ROUTE ORDER, asserting the flattened rule ordering is byte-identical
+// every time. This reproduces the production symptom directly: if the comparator
+// is not a strict weak ordering, sort.Slice yields an order that depends on the
+// input permutation.
+func assertRouteSortPermutationInvariant(t *testing.T, routes []RouteDescriptor, port int32, label string) {
+	t.Helper()
+
+	baseline := keysOf(SortAllRulesByPrecedence(cloneRoutes(routes), port))
+
+	check := func(perm []RouteDescriptor, desc string) {
+		got := keysOf(SortAllRulesByPrecedence(perm, port))
+		if !equalKeys(baseline, got) {
+			t.Fatalf("%s: sort order depends on input order (comparator not a strict weak ordering)\n permutation=%s\n baseline=%v\n got     =%v",
+				label, desc, baseline, got)
+		}
+	}
+
+	n := len(routes)
+
+	rev := make([]RouteDescriptor, n)
+	for i := range routes {
+		rev[n-1-i] = routes[i]
+	}
+	check(rev, "reverse")
+
+	for r := 1; r < n; r++ {
+		rot := make([]RouteDescriptor, 0, n)
+		rot = append(rot, routes[r:]...)
+		rot = append(rot, routes[:r]...)
+		check(rot, fmt.Sprintf("rotate-%d", r))
+	}
+
+	rng := rand.New(rand.NewSource(permStabilitySeed))
+	work := cloneRoutes(routes)
+	for s := 0; s < permStabilityShuffles; s++ {
+		rng.Shuffle(len(work), func(i, j int) { work[i], work[j] = work[j], work[i] })
+		check(cloneRoutes(work), fmt.Sprintf("shuffle-%d", s))
+	}
+}
+
+// Test_SortAllRulesByPrecedence_PermutationInvariant_Static runs each static
+// route scenario through ~1000 deterministic input permutations and asserts the
+// resulting ALB rule ordering never changes. This is the end-to-end,
+// static-data replacement for the previous randomly-generated shuffle test.
+func Test_SortAllRulesByPrecedence_PermutationInvariant_Static(t *testing.T) {
+	for name, routes := range swoRouteScenarios() {
+		t.Run(name, func(t *testing.T) {
+			assertRouteSortPermutationInvariant(t, routes, 0, name)
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// 2. Shuffle-determinism + stable/unstable agreement (end-to-end, mixed kinds)
-// ---------------------------------------------------------------------------
-
-// Test_SortAllRulesByPrecedence_ShuffleDeterministic reproduces the production
-// symptom directly: if the comparator is not a strict weak ordering, sort.Slice
-// yields an order that depends on the input permutation. We sort many shuffles
-// of the same realistic MIXED (HTTP+GRPC) input and assert the flattened output
-// order is identical every time. As an extra SWO check we also assert
-// sort.Slice and sort.SliceStable agree (they can diverge for a non-SWO less).
-func Test_SortAllRulesByPrecedence_ShuffleDeterministic(t *testing.T) {
-	for _, seed := range swoSeeds {
-		rng := rand.New(rand.NewSource(seed))
-		input := genRandomRouteSet(rng, 10)
-
-		baseline := keysOf(SortAllRulesByPrecedence(cloneRoutes(input), 0))
-
-		for shuffle := 0; shuffle < 40; shuffle++ {
-			shuffled := cloneRoutes(input)
-			rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
-			got := keysOf(SortAllRulesByPrecedence(shuffled, 0))
-			if !equalKeys(baseline, got) {
-				t.Fatalf("seed %d shuffle %d: sort order depends on input order (comparator not a strict weak ordering)\n baseline=%v\n got     =%v",
-					seed, shuffle, baseline, got)
-			}
-		}
-
-		// sort.Slice vs sort.SliceStable must agree for a valid SWO comparator.
-		flat := SortAllRulesByPrecedence(cloneRoutes(input), 0)
-		a := append([]RulePrecedence(nil), flat...)
-		b := append([]RulePrecedence(nil), flat...)
-		rng.Shuffle(len(a), func(i, j int) { a[i], a[j] = a[j], a[i] })
-		copy(b, a)
-		sort.Slice(a, func(i, j int) bool { return compareRulePrecedenceUnified(a[i], a[j]) })
-		sort.SliceStable(b, func(i, j int) bool { return compareRulePrecedenceUnified(b[i], b[j]) })
-		if !equalKeys(rpKeys(a), rpKeys(b)) {
-			t.Fatalf("seed %d: sort.Slice and sort.SliceStable disagree (comparator not a strict weak ordering)\n slice =%v\n stable=%v",
-				seed, rpKeys(a), rpKeys(b))
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 3. Golden ordering fixtures
+// 4. Golden ordering fixtures
 // ---------------------------------------------------------------------------
 
 // Test_SortAllRulesByPrecedence_Golden_MatchingAcrossRoutes encodes the exact
@@ -434,25 +812,33 @@ func Test_SortAllRulesByPrecedence_Golden_MatchingAcrossRoutes(t *testing.T) {
 	input := []RouteDescriptor{part2, part1}
 	result := SortAllRulesByPrecedence(input, 0)
 
-	assert.Equal(t, 4, len(result), "should produce 4 rules (2 matches per route)")
+	// Per-hostname split: each (route, match, hostname) is its own unit. part1 has
+	// 2 hostnames × 2 matches = 4 units; part2 has 1 hostname × 2 matches = 2 → 6.
+	assert.Equal(t, 6, len(result), "per-hostname split: part1(2 hosts×2 matches)+part2(1 host×2 matches)=6 rules")
 
 	type want struct {
 		name     string
 		matchIdx int
+		hostname string
 		pathLen  int
 		headers  int
 	}
-	// Correct Gateway API precedence order (highest first):
+	// example.com and example.net are equally specific, so hostname precedence is a
+	// tie; ordering falls to path length, then header count, then timestamp
+	// (part1 older than part2), then the hostname-string tiebreaker.
 	expected := []want{
-		{"gateway-conformance-infra/matching-part2", 0, 3, 0}, // "/v2"           -> most specific path
-		{"gateway-conformance-infra/matching-part1", 1, 1, 1}, // "/" + version=one
-		{"gateway-conformance-infra/matching-part2", 1, 1, 1}, // "/" + version=two (ties, later route)
-		{"gateway-conformance-infra/matching-part1", 0, 1, 0}, // "/" catch-all   -> least specific
+		{"gateway-conformance-infra/matching-part2", 0, "example.com", 3, 0}, // "/v2" -> most specific path
+		{"gateway-conformance-infra/matching-part1", 1, "example.com", 1, 1}, // "/" + version=one
+		{"gateway-conformance-infra/matching-part1", 1, "example.net", 1, 1}, // "/" + version=one (other host)
+		{"gateway-conformance-infra/matching-part2", 1, "example.com", 1, 1}, // "/" + version=two (later route)
+		{"gateway-conformance-infra/matching-part1", 0, "example.com", 1, 0}, // "/" catch-all
+		{"gateway-conformance-infra/matching-part1", 0, "example.net", 1, 0}, // "/" catch-all (other host)
 	}
 	for i, w := range expected {
 		got := result[i]
 		assert.Equalf(t, w.name, got.CommonRulePrecedence.RouteNamespacedName, "priority %d route", i+1)
 		assert.Equalf(t, w.matchIdx, got.CommonRulePrecedence.MatchIndexInRule, "priority %d matchIndex", i+1)
+		assert.Equalf(t, w.hostname, got.CommonRulePrecedence.Hostname, "priority %d hostname", i+1)
 		assert.Equalf(t, w.pathLen, got.PrecedenceFactor.PathLength, "priority %d pathLen", i+1)
 		assert.Equalf(t, w.headers, got.PrecedenceFactor.HeaderCount, "priority %d headerCount", i+1)
 	}
@@ -460,140 +846,7 @@ func Test_SortAllRulesByPrecedence_Golden_MatchingAcrossRoutes(t *testing.T) {
 	// The single most important invariant vs the reported bug: the specific
 	// "/v2" rule must outrank the catch-all rules, i.e. be at priority 1.
 	assert.Equal(t, "gateway-conformance-infra/matching-part2", result[0].CommonRulePrecedence.RouteNamespacedName,
-		"specific /v2 path must be highest precedence, not the larger-hostname-list catch-all")
+		"specific /v2 path must be highest precedence, not a catch-all")
 	assert.Equal(t, 3, result[0].PrecedenceFactor.PathLength,
 		"priority-1 rule must be the /v2 path (len 3)")
-}
-
-// ---------------------------------------------------------------------------
-// Route-set generation + serialization helpers for the determinism test
-// ---------------------------------------------------------------------------
-
-// genRandomRouteSet builds n realistic HTTP/GRPC routes with varied hostnames,
-// paths, methods, and headers. Distinct names keep each rule identifiable.
-func genRandomRouteSet(rng *rand.Rand, n int) []RouteDescriptor {
-	pathTypes := []string{"Exact", "PathPrefix", "RegularExpression"}
-	paths := []string{"/", "/v2", "/api/v1", "/health", "/api/v1/users"}
-	hostSets := [][]gwv1.Hostname{
-		nil,
-		{"example.com"},
-		{"example.com", "example.net"},
-		{"*.example.com"},
-		{"api.example.com"},
-		{"a.b.example.com", "example.com"},
-	}
-	grpcServices := []string{"com.example.UserService", "svc.Order", ""}
-	grpcMethods := []string{"GetUser", "List", ""}
-
-	out := make([]RouteDescriptor, 0, n)
-	ts := []time.Time{
-		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-	}
-	for i := 0; i < n; i++ {
-		hosts := hostSets[rng.Intn(len(hostSets))]
-		created := ts[rng.Intn(len(ts))]
-		ns := []string{"team-a", "team-b"}[rng.Intn(2)]
-
-		if rng.Intn(2) == 0 {
-			// HTTP route
-			numMatches := 1 + rng.Intn(2)
-			matches := make([]gwv1.HTTPRouteMatch, numMatches)
-			for m := range matches {
-				pt := (*gwv1.PathMatchType)(awssdk.String(pathTypes[rng.Intn(len(pathTypes))]))
-				match := gwv1.HTTPRouteMatch{
-					Path: &gwv1.HTTPPathMatch{Type: pt, Value: awssdk.String(paths[rng.Intn(len(paths))])},
-				}
-				if rng.Intn(2) == 0 {
-					match.Headers = []gwv1.HTTPHeaderMatch{{Name: "version", Value: "v"}}
-				}
-				matches[m] = match
-			}
-			out = append(out, &httpRouteDescription{
-				route: &gwv1.HTTPRoute{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:              fmt.Sprintf("http-%d", i),
-						Namespace:         ns,
-						CreationTimestamp: metav1.Time{Time: created},
-					},
-					Spec: gwv1.HTTPRouteSpec{Hostnames: hosts},
-				},
-				rules: []RouteRule{&convertedHTTPRouteRule{rule: &gwv1.HTTPRouteRule{Matches: matches}}},
-			})
-			continue
-		}
-
-		// GRPC route
-		var matches []gwv1.GRPCRouteMatch
-		if rng.Intn(4) != 0 { // sometimes an empty (catch-all) rule
-			svc := grpcServices[rng.Intn(len(grpcServices))]
-			meth := grpcMethods[rng.Intn(len(grpcMethods))]
-			mm := &gwv1.GRPCMethodMatch{Type: (*gwv1.GRPCMethodMatchType)(awssdk.String("Exact"))}
-			if svc != "" {
-				mm.Service = awssdk.String(svc)
-			}
-			if meth != "" {
-				mm.Method = awssdk.String(meth)
-			}
-			match := gwv1.GRPCRouteMatch{Method: mm}
-			if rng.Intn(2) == 0 {
-				match.Headers = []gwv1.GRPCHeaderMatch{{Name: "x-tenant", Value: "acme"}}
-			}
-			matches = []gwv1.GRPCRouteMatch{match}
-		}
-		out = append(out, &grpcRouteDescription{
-			route: &gwv1.GRPCRoute{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              fmt.Sprintf("grpc-%d", i),
-					Namespace:         ns,
-					CreationTimestamp: metav1.Time{Time: created},
-				},
-				Spec: gwv1.GRPCRouteSpec{Hostnames: hosts},
-			},
-			rules: []RouteRule{&convertedGRPCRouteRule{rule: &gwv1.GRPCRouteRule{Matches: matches}}},
-		})
-	}
-	return out
-}
-
-func cloneRoutes(in []RouteDescriptor) []RouteDescriptor {
-	return append([]RouteDescriptor(nil), in...)
-}
-
-// describeRule renders the salient factors of a RulePrecedence for failure output.
-func describeRule(r RulePrecedence) string {
-	c := r.CommonRulePrecedence
-	f := r.PrecedenceFactor
-	return fmt.Sprintf("{hosts=%v pt=%d pl=%d sec=%d hm=%t hdr=%d qp=%d name=%s ri=%d mi=%d ts=%s}",
-		c.Hostnames, f.PathType, f.PathLength, f.SecondaryLength, f.HasMethod, f.HeaderCount, f.QueryParamCount,
-		c.RouteNamespacedName, c.RuleIndexInRoute, c.MatchIndexInRule, c.RouteCreateTimestamp.Format("2006"))
-}
-
-// rpKey uniquely and stably identifies a flattened rule by its origin.
-func rpKey(r RulePrecedence) string {
-	c := r.CommonRulePrecedence
-	return fmt.Sprintf("%s#r%d#m%d", c.RouteNamespacedName, c.RuleIndexInRoute, c.MatchIndexInRule)
-}
-
-func rpKeys(rs []RulePrecedence) []string {
-	out := make([]string, len(rs))
-	for i, r := range rs {
-		out[i] = rpKey(r)
-	}
-	return out
-}
-
-func keysOf(rs []RulePrecedence) []string { return rpKeys(rs) }
-
-func equalKeys(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
