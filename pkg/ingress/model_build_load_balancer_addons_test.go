@@ -70,6 +70,31 @@ func Test_defaultModelBuildTask_buildWAFv2WebACLAssociation(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
+			name: " wafv2-acl-arn set to empty string",
+			fields: fields{
+				ingGroup: Group{
+					Members: []ClassifiedIngress{
+						{
+							Ing: &networking.Ingress{
+								ObjectMeta: metav1.ObjectMeta{
+									Namespace: "awesome-ns",
+									Name:      "awesome-ing-0",
+									Annotations: map[string]string{
+										"alb.ingress.kubernetes.io/wafv2-acl-arn": "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			args: args{
+				lbARN: core.LiteralStringToken("awesome-lb-arn"),
+			},
+			want:    nil,
+			wantErr: assert.NoError,
+		},
+		{
 			name: "when all ingresses have wafv2-acl-arn annotation set to wafv2-arn-1",
 			fields: fields{
 				ingGroup: Group{

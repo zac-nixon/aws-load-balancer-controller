@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/annotations"
@@ -60,7 +61,8 @@ func (t *defaultModelBuildTask) buildWAFv2WebACLAssociation(ctx context.Context,
 			}
 
 			rawWebACLARN := ""
-			if exists := t.annotationParser.ParseStringAnnotation(annotations.IngressSuffixWAFv2ACLARN, &rawWebACLARN, member.Ing.Annotations); !exists {
+			exists := t.annotationParser.ParseStringAnnotation(annotations.IngressSuffixWAFv2ACLARN, &rawWebACLARN, member.Ing.Annotations)
+			if !exists || rawWebACLARN == "" {
 				continue
 			}
 			explicitWebACLARNs.Insert(rawWebACLARN)
