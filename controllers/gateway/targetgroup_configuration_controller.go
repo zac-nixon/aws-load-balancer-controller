@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/gatewayutils"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/referencecounter"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/k8s"
-	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -28,7 +27,7 @@ import (
 )
 
 // NewTargetGroupConfigurationReconciler constructs a reconciler that responds to targetgroup configuration changes
-func NewTargetGroupConfigurationReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, serviceReferenceCounter referencecounter.ServiceReferenceCounter, finalizerManager k8s.FinalizerManager, logger logr.Logger) Reconciler {
+func NewTargetGroupConfigurationReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, serviceReferenceCounter referencecounter.ServiceReferenceCounter, finalizerManager k8s.FinalizerManager, logger logr.Logger, successCallback func(name string, namespace string), errorCallBack func(name string, namespace string, err error)) Reconciler {
 
 	return &targetgroupConfigurationReconciler{
 		k8sClient:               k8sClient,
@@ -39,6 +38,8 @@ func NewTargetGroupConfigurationReconciler(k8sClient client.Client, eventRecorde
 		serviceReferenceCounter: serviceReferenceCounter,
 		gwRetrieveFn:            gatewayutils.GetGatewaysManagedByLBController,
 		workers:                 controllerConfig.GatewayClassMaxConcurrentReconciles,
+		successCallback:         successCallback,
+		errorCallBack:           errorCallBack,
 	}
 }
 
@@ -53,6 +54,9 @@ type targetgroupConfigurationReconciler struct {
 
 	gwRetrieveFn func(ctx context.Context, k8sClient client.Client, gwController string) ([]*gwv1.Gateway, error)
 	workers      int
+
+	successCallback func(name string, namespace string)
+	errorCallBack   func(name string, namespace string, err error)
 }
 
 func (r *targetgroupConfigurationReconciler) SetupWatches(_ context.Context, ctrl controller.Controller, mgr ctrl.Manager, _ *kubernetes.Clientset) error {
@@ -65,7 +69,8 @@ func (r *targetgroupConfigurationReconciler) SetupWatches(_ context.Context, ctr
 }
 
 func (r *targetgroupConfigurationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	return runtime.HandleReconcileError(r.reconcile(ctx, req), r.logger)
+	err := r.reconcile(ctx, req)
+	return handleReconcileResult(req, err, r.logger, r.successCallback, r.errorCallBack)
 }
 
 func (r *targetgroupConfigurationReconciler) reconcile(ctx context.Context, req reconcile.Request) error {

@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/constants"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/routeutils"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/k8s"
-	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -33,7 +32,7 @@ const (
 )
 
 // NewListenerRuleConfigurationReconciler constructs a reconciler that responds to listener rule configuration changes
-func NewListenerRuleConfigurationReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, logger logr.Logger) Reconciler {
+func NewListenerRuleConfigurationReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, logger logr.Logger, successCallback func(name string, namespace string), errorCallBack func(name string, namespace string, err error)) Reconciler {
 	return &listenerRuleConfigurationReconciler{
 		k8sClient:        k8sClient,
 		eventRecorder:    eventRecorder,
@@ -41,6 +40,8 @@ func NewListenerRuleConfigurationReconciler(k8sClient client.Client, eventRecord
 		finalizerManager: finalizerManager,
 		finalizer:        controllerConfig.GatewayFinalizerConfig.ListenerRuleConfigurationFinalizer,
 		workers:          controllerConfig.GatewayClassMaxConcurrentReconciles,
+		successCallback:  successCallback,
+		errorCallBack:    errorCallBack,
 	}
 }
 
@@ -53,6 +54,8 @@ type listenerRuleConfigurationReconciler struct {
 	finalizerManager k8s.FinalizerManager
 	finalizer        string
 	workers          int
+	successCallback  func(name string, namespace string)
+	errorCallBack    func(name string, namespace string, err error)
 }
 
 func (r *listenerRuleConfigurationReconciler) SetupWatches(_ context.Context, ctrl controller.Controller, mgr ctrl.Manager, clientSet *kubernetes.Clientset) error {
@@ -73,7 +76,8 @@ func (r *listenerRuleConfigurationReconciler) SetupWatches(_ context.Context, ct
 }
 
 func (r *listenerRuleConfigurationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	return runtime.HandleReconcileError(r.reconcile(ctx, req), r.logger)
+	err := r.reconcile(ctx, req)
+	return handleReconcileResult(req, err, r.logger, r.successCallback, r.errorCallBack)
 }
 
 func (r *listenerRuleConfigurationReconciler) reconcile(ctx context.Context, req reconcile.Request) error {

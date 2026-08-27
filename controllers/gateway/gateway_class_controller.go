@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/constants"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/gateway/gatewayutils"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/k8s"
-	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -34,7 +33,7 @@ const (
 )
 
 // NewGatewayClassReconciler constructs a reconciler that responds to gateway class object changes
-func NewGatewayClassReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, enabledControllers sets.Set[string], logger logr.Logger) Reconciler {
+func NewGatewayClassReconciler(k8sClient client.Client, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, enabledControllers sets.Set[string], logger logr.Logger, successCallback func(name string, namespace string), errorCallBack func(name string, namespace string, err error)) Reconciler {
 
 	return &gatewayClassReconciler{
 		k8sClient:                   k8sClient,
@@ -49,6 +48,8 @@ func NewGatewayClassReconciler(k8sClient client.Client, eventRecorder record.Eve
 		configResolverFn:            gatewayutils.ResolveLoadBalancerConfig,
 		defaultTGCResolverFn:        lookUpDefaultTGCByName,
 		gatewayResolverFn:           gatewayutils.GetGatewaysManagedByGatewayClass,
+		successCallback:             successCallback,
+		errorCallBack:               errorCallBack,
 	}
 }
 
@@ -67,6 +68,8 @@ type gatewayClassReconciler struct {
 	configResolverFn            func(ctx context.Context, k8sClient client.Client, reference *gwv1.ParametersReference) (*elbv2gw.LoadBalancerConfiguration, error)
 	defaultTGCResolverFn        func(ctx context.Context, k8sClient client.Client, name, namespace string) (*elbv2gw.TargetGroupConfiguration, error)
 	gatewayResolverFn           func(ctx context.Context, k8sClient client.Client, gwClass *gwv1.GatewayClass) ([]*gwv1.Gateway, error)
+	successCallback             func(name string, namespace string)
+	errorCallBack               func(name string, namespace string, err error)
 }
 
 func (r *gatewayClassReconciler) SetupWatches(_ context.Context, ctrl controller.Controller, mgr ctrl.Manager, _ *kubernetes.Clientset) error {
@@ -106,7 +109,7 @@ func (r *gatewayClassReconciler) SetupWatches(_ context.Context, ctrl controller
 // +kubebuilder:rbac:groups=gateway.k8s.aws,resources=loadbalancerconfigurations,verbs=get;list;watch
 func (r *gatewayClassReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	err := r.reconcile(ctx, req)
-	return runtime.HandleReconcileError(err, r.logger)
+	return handleReconcileResult(req, err, r.logger, r.successCallback, r.errorCallBack)
 }
 
 func (r *gatewayClassReconciler) reconcile(ctx context.Context, req reconcile.Request) error {

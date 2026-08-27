@@ -29,7 +29,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "v1 present but LBC CRDs missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion: sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute"),
+				GatewayV1GroupVersion: sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "ReferenceGrant"),
 			},
 			albEnabled:         false,
 			nlbEnabled:         false,
@@ -38,7 +38,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "v1 and LBC CRDs present",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -48,7 +48,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "tcproute and udproute not served at v1 (gateway api < 1.6) - NLB disabled",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -58,7 +58,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "all standard CRDs present but LBC CRDs missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion: sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion: sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 			},
 			albEnabled:         false,
 			nlbEnabled:         false,
@@ -67,7 +67,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "all present including LBC CRDs but ListenerSet missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -77,7 +77,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "all present including ListenerSet and LBC CRDs",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ListenerSet"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ListenerSet", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -87,7 +87,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "gateway missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         false,
@@ -97,7 +97,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "gateway class missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         false,
@@ -107,7 +107,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "httproute missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "GRPCRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         false,
@@ -117,7 +117,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "grpcroute missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "TLSRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         false,
@@ -127,7 +127,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "tlsroute missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TCPRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -137,7 +137,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "tcproute missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "UDPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "UDPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -147,7 +147,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "udproute missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "TLSRoute", "TCPRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: lbcKinds,
 			},
 			albEnabled:         true,
@@ -175,7 +175,7 @@ func TestApplyGatewayFeatureFlags(t *testing.T) {
 		{
 			name: "partial LBC CRDs - TargetGroupConfiguration missing",
 			presentKinds: map[string]sets.Set[string]{
-				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute"),
+				GatewayV1GroupVersion:  sets.New[string]("Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "ReferenceGrant"),
 				LBCGatewayGroupVersion: sets.New[string]("LoadBalancerConfiguration", "ListenerRuleConfiguration"),
 			},
 			albEnabled:         false,

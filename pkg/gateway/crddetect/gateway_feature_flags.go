@@ -18,8 +18,8 @@ var (
 	// lbcGatewayKinds are the AWS vended CRDs required by both ALB and NLB gateway controllers.
 	lbcGatewayKinds = []string{"TargetGroupConfiguration", "LoadBalancerConfiguration", "ListenerRuleConfiguration"}
 
-	albKinds         = map[string][]string{GatewayV1GroupVersion: {"Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute"}, LBCGatewayGroupVersion: lbcGatewayKinds}
-	nlbKinds         = map[string][]string{GatewayV1GroupVersion: {"Gateway", "GatewayClass", "TLSRoute", "TCPRoute", "UDPRoute"}, LBCGatewayGroupVersion: lbcGatewayKinds}
+	albKinds         = map[string][]string{GatewayV1GroupVersion: {"Gateway", "GatewayClass", "HTTPRoute", "GRPCRoute", "ReferenceGrant"}, LBCGatewayGroupVersion: lbcGatewayKinds}
+	nlbKinds         = map[string][]string{GatewayV1GroupVersion: {"Gateway", "GatewayClass", "TLSRoute", "TCPRoute", "UDPRoute", "ReferenceGrant"}, LBCGatewayGroupVersion: lbcGatewayKinds}
 	listenerSetKinds = map[string][]string{GatewayV1GroupVersion: {"ListenerSet"}}
 )
 
