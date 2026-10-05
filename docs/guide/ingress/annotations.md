@@ -86,9 +86,10 @@ You can add annotations to kubernetes Ingress and Service objects to customize t
 | [alb.ingress.kubernetes.io/frontend-nlb-healthcheck-unhealthy-threshold-count](#frontend-nlb-healthcheck-unhealthy-threshold-count) | integer                     |3| Ingress | N/A           |
 | [alb.ingress.kubernetes.io/frontend-nlb-healthcheck-success-codes](#frontend-nlb-healthcheck-success-codes) | string                                     |200| Ingress | N/A           |
 | [alb.ingress.kubernetes.io/frontend-nlb-tags](#frontend-nlb-tags) | stringMap | N/A | Ingress | Exclusive |
-| [alb.ingress.kubernetes.io/frontend-nlb-eip-allocations](#frontend-nlb-eip-allocations) | stringList                                     |200| Ingress | N/A           |
+| [alb.ingress.kubernetes.io/frontend-nlb-eip-allocations](#frontend-nlb-eip-allocations) | stringList                                     |N/A| Ingress | N/A           |
 | [alb.ingress.kubernetes.io/target-control-port.${serviceName}.${servicePort}](#target-control-port)                                       | integer                                    |N/A| Ingress | N/A           |
 | [alb.ingress.kubernetes.io/frontend-nlb-attributes](#frontend-nlb-attributes) | stringList                                     |N/A| Ingress | N/A           |
+| [alb.ingress.kubernetes.io/frontend-nlb-status-only](#frontend-nlb-status-only) | boolean                                    |false| Ingress | N/A           |
 
 ## IngressGroup
 IngressGroup feature enables you to group multiple Ingress resources together.
@@ -704,6 +705,8 @@ Access control for LoadBalancer can be controlled with following annotations:
         Amazon ELB cannot change a load balancer's scheme in place; updating its `Scheme` property requires replacement. Therefore, changing the scheme from `internet-facing` to `internal`, or vice versa, causes the controller to create a replacement Application Load Balancer. Plan a traffic migration to avoid downtime.
 
 - <a name="inbound-cidrs">`alb.ingress.kubernetes.io/inbound-cidrs`</a> specifies the CIDRs that are allowed to access LoadBalancer.
+
+    The Load Balancer Controller canonicalizes CIDRs.
 
     !!!note "Merge Behavior"
         `inbound-cidrs` is merged across all Ingresses in IngressGroup, but is exclusive per listen-port.
@@ -1455,4 +1458,37 @@ When this option is set to true, the controller will automatically provision a N
         - enable client availability zone affinity
         ```
         alb.ingress.kubernetes.io/frontend-nlb-attributes: dns_record.client_routing_policy=availability_zone_affinity
+        ```
+
+- <a name="frontend-nlb-status-only">`alb.ingress.kubernetes.io/frontend-nlb-status-only`</a> controls whether only the frontend NLB hostname is written to `status.loadBalancer.ingress` instead of both the ALB and NLB hostnames.
+
+    By default, when a frontend NLB is enabled, both the ALB and NLB hostnames appear in the ingress status. When using [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) on AWS, only a DNS record for the first entry is created (see [external-dns#5661](https://github.com/kubernetes-sigs/external-dns/issues/5661)), which means the NLB does not get a DNS record. Setting this annotation to `"true"` restricts the status to only the NLB hostname, so ExternalDNS creates a DNS record pointing at the NLB.
+
+    !!!note
+        If `alb.ingress.kubernetes.io/enable-frontend-nlb` is not set, this annotation has no effect. If the NLB has not yet been provisioned or fails to provision, the ingress status is left empty until the NLB is ready, avoiding a transient DNS record pointing at the ALB.
+
+    === "NLB only"
+        ```yaml
+        alb.ingress.kubernetes.io/enable-frontend-nlb: "true"
+        alb.ingress.kubernetes.io/frontend-nlb-status-only: "true"
+        ```
+        Resulting ingress status:
+        ```yaml
+        status:
+          loadBalancer:
+            ingress:
+              - hostname: nlb-xxxx.elb.amazonaws.com
+        ```
+
+    === "Both hostnames (default)"
+        ```yaml
+        alb.ingress.kubernetes.io/enable-frontend-nlb: "true"
+        ```
+        Resulting ingress status:
+        ```yaml
+        status:
+          loadBalancer:
+            ingress:
+              - hostname: alb-xxxx.elb.amazonaws.com
+              - hostname: nlb-xxxx.elb.amazonaws.com
         ```
